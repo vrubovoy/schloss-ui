@@ -149,3 +149,5 @@ fit best; add a new section if none fits.
   submodule and link it via pnpm's `workspace:*` protocol instead;
   removed the tag-triggered publish workflow and the now-dead
   `publishConfig`/`files` package.json fields.
+- Added an "Updated docs" line to the PR checklist template, matching
+  the same addition across the platform's other repos.
