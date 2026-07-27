@@ -21,4 +21,5 @@ Closes #
 
 - [ ] Added/updated tests for any behavior change
 - [ ] Updated `CHANGELOG.md`
+- [ ] Updated docs (README) if applicable
 - [ ] Kept this PR focused on one logical change
