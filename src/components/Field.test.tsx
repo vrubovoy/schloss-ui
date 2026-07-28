@@ -83,6 +83,27 @@ describe('Field (input mode)', () => {
     expect(screen.queryByText('Обязательное поле')).not.toBeInTheDocument()
   })
 
+  it('marks the input aria-invalid and gives it a red border when error is provided', () => {
+    render(
+      <Field
+        label="Email"
+        error="Неверный формат"
+        value=""
+        onChange={() => {}}
+      />,
+    )
+    const input = screen.getByLabelText('Email')
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(input.style.border).toContain('var(--danger)')
+  })
+
+  it('is not aria-invalid and has the default border when error is not provided', () => {
+    render(<Field label="Email" value="" onChange={() => {}} />)
+    const input = screen.getByLabelText('Email')
+    expect(input).toHaveAttribute('aria-invalid', 'false')
+    expect(input.style.border).not.toContain('var(--danger)')
+  })
+
   it('renders the prefix content alongside the input', () => {
     render(
       <Field
