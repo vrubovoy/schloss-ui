@@ -5,9 +5,13 @@ export interface FooterProps {
   description?: string
   /** e.g. "1.4.0" (no leading "v") - the consuming app's own package.json version, shown as "· v1.4.0". Omit if the caller has no version to report. */
   version?: string
+  /** Link to this app's own plain-language user guide, e.g. "/help". Omit to render no help link at all. */
+  helpHref?: string
+  /** Link text for helpHref. Defaults to "Как пользоваться". */
+  helpLabel?: string
 }
 
-export function Footer({ serviceName, description, version }: FooterProps) {
+export function Footer({ serviceName, description, version, helpHref, helpLabel = 'Как пользоваться' }: FooterProps) {
   return (
     <footer
       style={{
@@ -38,6 +42,11 @@ export function Footer({ serviceName, description, version }: FooterProps) {
           {serviceName} — открытый код, свой хостинг
           {version && ` · v${version}`}
         </span>
+        {helpHref && (
+          <a href={helpHref} style={{ color: 'var(--text-muted)' }}>
+            {helpLabel}
+          </a>
+        )}
         <a
           href="https://github.com/zudaR107"
           target="_blank"
