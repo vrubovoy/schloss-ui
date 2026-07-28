@@ -151,3 +151,12 @@ fit best; add a new section if none fits.
   `publishConfig`/`files` package.json fields.
 - Added an "Updated docs" line to the PR checklist template, matching
   the same addition across the platform's other repos.
+- `StatTile`'s label had no reserved height - a longer label wrapping to
+  two lines (e.g. "Инвайты в ожидании") pushed that tile's value down
+  relative to the single-line-label tiles beside it in the same row,
+  breaking the row's shared baseline. Now reserves two lines' worth of
+  height regardless of actual wrap.
+- `Badge` relied on the browser's default line-height ("normal"), which
+  centers by box height but not by glyph baseline - next to plain text at
+  a different font-size, the two looked slightly off-level from each
+  other. Now sets an explicit `lineHeight: 1`.
