@@ -104,6 +104,14 @@ describe('Field (input mode)', () => {
     expect(input.style.border).not.toContain('var(--danger)')
   })
 
+  it('invalid alone gives a red border and aria-invalid without rendering any error text', () => {
+    render(<Field label="Email" invalid value="" onChange={() => {}} />)
+    const input = screen.getByLabelText('Email')
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(input.style.border).toContain('var(--danger)')
+    expect(screen.queryByRole('paragraph')).not.toBeInTheDocument()
+  })
+
   it('renders the prefix content alongside the input', () => {
     render(
       <Field
