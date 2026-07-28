@@ -31,6 +31,14 @@ export function Badge({ variant, children, dot = false }: BadgeProps) {
         padding: '0.2rem 0.5rem',
         fontSize: '0.6875rem',
         fontWeight: 600,
+        // Explicit rather than the browser's default "normal" leading -
+        // without it, a badge sitting next to plain text at a different
+        // font-size (e.g. the invites journal's status badge next to its
+        // "от <name>" caption) centers correctly by box height but the
+        // two pieces of text still look slightly off-baseline from each
+        // other, since "normal" line-height's ascent/descent split isn't
+        // proportional across different font sizes.
+        lineHeight: 1,
         whiteSpace: 'nowrap',
       }}
     >
