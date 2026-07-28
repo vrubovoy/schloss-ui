@@ -64,6 +64,12 @@ fit best; add a new section if none fits.
   `aria-invalid` - previously only the text below the field changed,
   making it easy to miss which field a form-wide error actually applied
   to.
+- `Field`: added `invalid?: boolean`, separate from `error?: string` - same
+  red border/`aria-invalid` as `error`, without rendering any text. For a
+  shared message that can't be pinned on one specific field (e.g. a login
+  form's "invalid email or password," deliberately not saying which one to
+  avoid revealing whether an email is registered) - highlight both fields,
+  show the message once yourself.
 - `Modal`: header row with an optional context icon badge, a real
   icon close-button (not a bare "×" glyph), a plain body slot, and a
   right-aligned footer built from `Button` - callers put the primary

@@ -4,6 +4,12 @@ import { ChevronDown } from 'lucide-react'
 interface FieldSharedProps {
   label: string
   error?: string
+  /** Same red border/aria-invalid as `error`, without rendering any text -
+   * for a shared message that can't be pinned on one specific field (e.g.
+   * a login form's "invalid email or password," which deliberately
+   * doesn't say which one to avoid revealing whether an email is
+   * registered). Show the message once yourself, elsewhere on the page. */
+  invalid?: boolean
   /** For currency symbols on amount fields, rendered inline before the input. */
   prefix?: ReactNode
   /** For an interactive control (e.g. a password visibility toggle), rendered inline after the input. Unlike prefix, receives pointer events. */
@@ -57,8 +63,8 @@ const errorFocusRingStyle = {
   boxShadow: '0 0 0 3px var(--danger-muted)',
 } as const
 
-function borderStyle(error: string | undefined, focused: boolean) {
-  if (error) return focused ? errorFocusRingStyle : errorBorderStyle
+function borderStyle(error: string | undefined, invalid: boolean | undefined, focused: boolean) {
+  if (error || invalid) return focused ? errorFocusRingStyle : errorBorderStyle
   return focused ? focusRingStyle : null
 }
 
@@ -122,7 +128,7 @@ function FieldError({ children }: { children: ReactNode }) {
   )
 }
 
-function InputField({ label, error, prefix, suffix, id, style, onFocus, onBlur, ...rest }: FieldInputProps) {
+function InputField({ label, error, invalid, prefix, suffix, id, style, onFocus, onBlur, ...rest }: FieldInputProps) {
   const [focused, setFocused] = useState(false)
   const generatedId = useId()
   const fieldId = id ?? generatedId
@@ -135,7 +141,7 @@ function InputField({ label, error, prefix, suffix, id, style, onFocus, onBlur, 
         <input
           {...rest}
           id={fieldId}
-          aria-invalid={!!error}
+          aria-invalid={!!error || !!invalid}
           onFocus={(event) => {
             setFocused(true)
             onFocus?.(event)
@@ -148,7 +154,7 @@ function InputField({ label, error, prefix, suffix, id, style, onFocus, onBlur, 
             ...fieldBoxStyle,
             paddingLeft: prefix ? '1.75rem' : '0.75rem',
             paddingRight: suffix ? '2.25rem' : '0.75rem',
-            ...borderStyle(error, focused),
+            ...borderStyle(error, invalid, focused),
             ...style,
           }}
         />
@@ -159,7 +165,7 @@ function InputField({ label, error, prefix, suffix, id, style, onFocus, onBlur, 
   )
 }
 
-function SelectField({ label, error, prefix, suffix, id, style, onFocus, onBlur, ...rest }: FieldSelectProps) {
+function SelectField({ label, error, invalid, prefix, suffix, id, style, onFocus, onBlur, ...rest }: FieldSelectProps) {
   const [focused, setFocused] = useState(false)
   const generatedId = useId()
   const fieldId = id ?? generatedId
@@ -172,7 +178,7 @@ function SelectField({ label, error, prefix, suffix, id, style, onFocus, onBlur,
         <select
           {...rest}
           id={fieldId}
-          aria-invalid={!!error}
+          aria-invalid={!!error || !!invalid}
           onFocus={(event) => {
             setFocused(true)
             onFocus?.(event)
@@ -187,7 +193,7 @@ function SelectField({ label, error, prefix, suffix, id, style, onFocus, onBlur,
             paddingLeft: prefix ? '1.75rem' : '0.75rem',
             paddingRight: suffix ? '2.25rem' : '2rem',
             cursor: 'pointer',
-            ...borderStyle(error, focused),
+            ...borderStyle(error, invalid, focused),
             ...style,
           }}
         />
