@@ -59,6 +59,11 @@ fit best; add a new section if none fits.
   and interactive (unlike `prefix`, it receives pointer events) - for an
   overlay control like a password-visibility toggle. In select mode, a
   supplied `suffix` replaces the default trailing chevron.
+- `Field`: an `error` now also gives the input/select a red border (a
+  red-tinted focus ring instead of the accent one while focused) and sets
+  `aria-invalid` - previously only the text below the field changed,
+  making it easy to miss which field a form-wide error actually applied
+  to.
 - `Modal`: header row with an optional context icon badge, a real
   icon close-button (not a bare "×" glyph), a plain body slot, and a
   right-aligned footer built from `Button` - callers put the primary

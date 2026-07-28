@@ -44,6 +44,24 @@ const focusRingStyle = {
   boxShadow: '0 0 0 3px var(--accent-muted)',
 } as const
 
+// A red border alone (no shadow) when an errored field isn't focused -
+// the shadow only appears on focus, matching focusRingStyle's own
+// restraint, so a page with several errored fields doesn't turn into a
+// wall of glowing boxes.
+const errorBorderStyle = {
+  border: '1px solid var(--danger)',
+} as const
+
+const errorFocusRingStyle = {
+  border: '1px solid var(--danger)',
+  boxShadow: '0 0 0 3px var(--danger-muted)',
+} as const
+
+function borderStyle(error: string | undefined, focused: boolean) {
+  if (error) return focused ? errorFocusRingStyle : errorBorderStyle
+  return focused ? focusRingStyle : null
+}
+
 function FieldLabel({ htmlFor, label }: { htmlFor: string; label: string }) {
   return (
     <label
@@ -117,6 +135,7 @@ function InputField({ label, error, prefix, suffix, id, style, onFocus, onBlur, 
         <input
           {...rest}
           id={fieldId}
+          aria-invalid={!!error}
           onFocus={(event) => {
             setFocused(true)
             onFocus?.(event)
@@ -129,7 +148,7 @@ function InputField({ label, error, prefix, suffix, id, style, onFocus, onBlur, 
             ...fieldBoxStyle,
             paddingLeft: prefix ? '1.75rem' : '0.75rem',
             paddingRight: suffix ? '2.25rem' : '0.75rem',
-            ...(focused ? focusRingStyle : null),
+            ...borderStyle(error, focused),
             ...style,
           }}
         />
@@ -153,6 +172,7 @@ function SelectField({ label, error, prefix, suffix, id, style, onFocus, onBlur,
         <select
           {...rest}
           id={fieldId}
+          aria-invalid={!!error}
           onFocus={(event) => {
             setFocused(true)
             onFocus?.(event)
@@ -167,7 +187,7 @@ function SelectField({ label, error, prefix, suffix, id, style, onFocus, onBlur,
             paddingLeft: prefix ? '1.75rem' : '0.75rem',
             paddingRight: suffix ? '2.25rem' : '2rem',
             cursor: 'pointer',
-            ...(focused ? focusRingStyle : null),
+            ...borderStyle(error, focused),
             ...style,
           }}
         />
