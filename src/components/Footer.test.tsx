@@ -143,4 +143,29 @@ describe('Footer', () => {
       screen.getByText('Kuvert — открытый код, свой хостинг · v1.4.0'),
     ).toBeInTheDocument()
   })
+
+  it('does not render a help link when helpHref is omitted', () => {
+    render(<Footer serviceName="Kuvert" />)
+
+    expect(
+      screen.queryByRole('link', { name: 'Как пользоваться' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('renders a help link with the default label when helpHref is provided', () => {
+    render(<Footer serviceName="Kuvert" helpHref="/help" />)
+
+    const helpLink = screen.getByRole('link', { name: 'Как пользоваться' })
+    expect(helpLink).toHaveAttribute('href', '/help')
+  })
+
+  it('renders a help link with a custom label when helpLabel is also provided', () => {
+    render(
+      <Footer serviceName="Kuvert" helpHref="/help" helpLabel="Справка" />,
+    )
+
+    expect(
+      screen.getByRole('link', { name: 'Справка' }),
+    ).toHaveAttribute('href', '/help')
+  })
 })
