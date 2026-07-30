@@ -98,7 +98,19 @@ export function ThemeToggle({ trigger, align = 'right' }: ThemeToggleProps) {
     let top = position.top
     let left = align === 'right' ? anchorRect.right - panelRect.width : position.left
     const bottomOverflow = panelRect.bottom - window.innerHeight
-    if (bottomOverflow > 0) top = Math.max(8, top - bottomOverflow - 8)
+    if (bottomOverflow > 0) {
+      // Not enough room below - flip to open above the trigger instead.
+      // Just nudging the panel up by the overflow amount (as if merely
+      // pinning it to the bottom of the viewport) ignores where the
+      // trigger actually is, and can shift the panel up far enough to
+      // land on top of the trigger itself when the panel is taller than
+      // the space remaining below it (confirmed live: kuvert's sidebar
+      // trigger sitting near the bottom of a short viewport). Flipping
+      // above only when there's actually room there keeps the panel from
+      // ever covering its own trigger.
+      const flippedTop = anchorRect.top - panelRect.height - 8
+      top = flippedTop >= 8 ? flippedTop : Math.max(8, top - bottomOverflow - 8)
+    }
     left = Math.min(Math.max(8, left), window.innerWidth - panelRect.width - 8)
     setPosition({ top, left })
   }, [position, align])

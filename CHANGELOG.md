@@ -196,3 +196,17 @@ fit best; add a new section if none fits.
   to `document.body`, positions with `position: fixed` from
   `getBoundingClientRect()`, and nudges itself back on-screen once its
   real size is known.
+- The above off-screen correction could nudge the dropdown up far enough
+  to land directly on top of its own trigger, hiding it, when the panel
+  was taller than the space remaining below the trigger (confirmed live
+  in kuvert's sidebar). Now flips to open above the trigger instead when
+  there's room there, rather than just pinning to the bottom of the
+  viewport regardless of where the trigger is.
+- Cross-origin theme sync (schloss-ui#61) didn't actually work: `applyTheme`
+  minted a fresh `Date.now()` timestamp for a freshly-visited origin's
+  very first call (its own system-default theme, not a real preference),
+  which then permanently outranked a real pick made moments earlier on
+  another origin. An omitted `updatedAt` now always reuses whatever's
+  already stored (0 if nothing ever was) - only an explicit timestamp
+  (a real `ThemeToggle` selection, or `ThemeSync` adopting a hub value)
+  counts as a real preference change.

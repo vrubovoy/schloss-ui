@@ -148,14 +148,17 @@ describe('applyTheme (timestamp handling)', () => {
     expect(getThemeUpdatedAt()).toBe(222)
   })
 
-  it('stamps a fresh Date.now()-based timestamp when updatedAt is omitted and none is stored yet', () => {
-    const before = Date.now()
+  it('stores 0 (not a fresh Date.now()) when updatedAt is omitted and none is stored yet', () => {
+    // A first-ever call with no explicit updatedAt is just reflecting the
+    // system-default theme, not declaring a real preference - stamping
+    // "now" here would make a freshly-opened origin permanently outrank a
+    // real selection made moments earlier elsewhere (the actual bug this
+    // guards against: pick a theme on one origin, then open another
+    // origin for the first time - its own bootstrap call must not mint a
+    // "newer" timestamp for the default theme and push that over the real
+    // pick).
     applyTheme('dark')
-    const after = Date.now()
-
-    const stored = getThemeUpdatedAt()
-    expect(stored).toBeGreaterThanOrEqual(before)
-    expect(stored).toBeLessThanOrEqual(after)
+    expect(getThemeUpdatedAt()).toBe(0)
   })
 
   it('preserves an existing stored updatedAt when called again without one (e.g. applyTheme(getStoredTheme()) on reload)', () => {
@@ -211,20 +214,16 @@ describe('applyTheme (THEME_CHANGE_EVENT dispatch)', () => {
     window.removeEventListener(THEME_CHANGE_EVENT, handler)
   })
 
-  it('dispatches THEME_CHANGE_EVENT with a freshly stamped updatedAt on a first-ever call', () => {
+  it('dispatches THEME_CHANGE_EVENT with updatedAt 0 (not a fresh stamp) on a first-ever call', () => {
     const handler = vi.fn()
     window.addEventListener(THEME_CHANGE_EVENT, handler)
 
-    const before = Date.now()
     applyTheme('sepia')
-    const after = Date.now()
 
     expect(handler).toHaveBeenCalledTimes(1)
     const event = handler.mock.calls[0][0] as CustomEvent
-    expect(event.detail.theme).toBe('sepia')
-    expect(event.detail.updatedAt).toBeGreaterThanOrEqual(before)
-    expect(event.detail.updatedAt).toBeLessThanOrEqual(after)
-    expect(event.detail.updatedAt).toBe(getThemeUpdatedAt())
+    expect(event.detail).toEqual({ theme: 'sepia', updatedAt: 0 })
+    expect(getThemeUpdatedAt()).toBe(0)
 
     window.removeEventListener(THEME_CHANGE_EVENT, handler)
   })

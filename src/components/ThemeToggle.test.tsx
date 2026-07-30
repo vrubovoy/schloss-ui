@@ -407,4 +407,102 @@ describe('ThemeToggle (viewport-aware panel positioning)', () => {
     // on the trigger's right edge, not the pass-1 guess.
     expect(left + PANEL_WIDTH).toBeCloseTo(triggerRect.right, 5)
   })
+
+  it('flips the panel to open above the trigger when opening below would overflow, instead of pinning its bottom to the viewport and covering the trigger', async () => {
+    const user = userEvent.setup()
+    Object.defineProperty(window, 'innerHeight', { value: 200, configurable: true })
+
+    // Trigger sits near the bottom of the short viewport, so a naive
+    // below-placement (panel top = triggerRect.bottom = 190) plus the
+    // panel's real height (150) would overflow the 200px viewport by a lot.
+    // But there IS enough room above the trigger (185px down to the
+    // viewport top) for a 150px-tall panel plus the 8px gap.
+    const triggerRect = {
+      top: 185,
+      bottom: 190,
+      left: 50,
+      right: 130,
+      width: 80,
+      height: 5,
+      x: 50,
+      y: 185,
+      toJSON() {},
+    } as DOMRect
+    const PANEL_HEIGHT = 150
+    const panelRect = {
+      top: 190,
+      bottom: 190 + PANEL_HEIGHT,
+      left: 50,
+      right: 350,
+      width: 300,
+      height: PANEL_HEIGHT,
+      x: 50,
+      y: 190,
+      toJSON() {},
+    } as DOMRect
+
+    render(<ThemeToggle />)
+    const trigger = screen.getByRole('button', { name: 'Сменить тему' })
+    mockRects(trigger, triggerRect, panelRect)
+
+    await user.click(trigger)
+
+    const panel = findPanelElement()
+    const top = parseFloat(panel.style.top || '0')
+
+    // Key regression check: the panel's rendered vertical range
+    // ([top, top + height]) must never overlap the trigger's own vertical
+    // range - i.e. the panel's bottom edge must sit at or above 8px short
+    // of the trigger's top edge (a small epsilon allows for the exact 8px
+    // gap arithmetic).
+    expect(top + PANEL_HEIGHT).toBeLessThanOrEqual(triggerRect.top - 8 + 1)
+    // And it must not have been pushed above the viewport's top edge either.
+    expect(top).toBeGreaterThanOrEqual(8 - 1)
+  })
+
+  it('falls back gracefully (renders, does not throw) when the viewport is so short that even flipping above the trigger does not fit', async () => {
+    const user = userEvent.setup()
+    Object.defineProperty(window, 'innerHeight', { value: 100, configurable: true })
+
+    // Trigger near the middle of a viewport (100px) that is itself shorter
+    // than the panel (150px) - neither opening below nor flipping above can
+    // fully avoid overflow, so this only exercises the last-resort fallback.
+    const triggerRect = {
+      top: 45,
+      bottom: 55,
+      left: 50,
+      right: 130,
+      width: 80,
+      height: 10,
+      x: 50,
+      y: 45,
+      toJSON() {},
+    } as DOMRect
+    const PANEL_HEIGHT = 150
+    const panelRect = {
+      top: 55,
+      bottom: 55 + PANEL_HEIGHT,
+      left: 50,
+      right: 350,
+      width: 300,
+      height: PANEL_HEIGHT,
+      x: 50,
+      y: 55,
+      toJSON() {},
+    } as DOMRect
+
+    render(<ThemeToggle />)
+    const trigger = screen.getByRole('button', { name: 'Сменить тему' })
+    mockRects(trigger, triggerRect, panelRect)
+
+    await expect(user.click(trigger)).resolves.not.toThrow()
+
+    const panel = findPanelElement()
+    const top = parseFloat(panel.style.top || '0')
+
+    expect(Number.isNaN(top)).toBe(false)
+    for (const label of OPTION_LABELS) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
+    }
+  })
 })
