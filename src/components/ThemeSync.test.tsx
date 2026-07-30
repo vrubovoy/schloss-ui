@@ -1,241 +1,284 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { ThemeSync } from './ThemeSync'
-import {
-  applyTheme,
-  getStoredTheme,
-  getThemeUpdatedAt,
-  THEME_CHANGE_EVENT,
-} from '../lib/theme'
+import { applyTheme, getStoredTheme, getThemeUpdatedAt } from '../lib/theme'
 
-const HUB_ORIGIN = 'https://hub.example.com'
-const THEME_KEY = 'schloss-theme'
+const API_ORIGIN = 'https://hub.example.test'
+const THEME_URL = `${API_ORIGIN}/theme`
+
+const STORAGE_KEY = 'schloss-theme'
 const UPDATED_AT_KEY = 'schloss-theme-updated-at'
+
+function jsonResponse(ok: boolean, body: unknown): Response {
+  return { ok, json: () => Promise.resolve(body) } as Response
+}
+
+function flush() {
+  return act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+
+let fetchMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   localStorage.clear()
   document.documentElement.removeAttribute('data-theme')
+  fetchMock = vi.fn()
+  // Base fallback for any fetch call beyond the ones a test explicitly
+  // queues with mockResolvedValueOnce/mockImplementationOnce (e.g. the PUT
+  // requests triggered by THEME_CHANGE_EVENT or by adopting a server
+  // theme) - keeps every call promise-returning so `push`'s internal
+  // `.catch()` always has a real promise to attach to.
+  fetchMock.mockResolvedValue(jsonResponse(true, { theme: null, updatedAt: 0 }))
+  vi.stubGlobal('fetch', fetchMock)
 })
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
-/** Renders <ThemeSync>, returns the rendered iframe element. */
-function renderThemeSync() {
-  const { container, unmount } = render(<ThemeSync hubOrigin={HUB_ORIGIN} />)
-  const iframe = container.querySelector('iframe')
-  if (!iframe) throw new Error('ThemeSync did not render an <iframe>')
-  return { container, iframe, unmount }
-}
-
-/** Fires the iframe's `load` event, as jsdom won't do this on its own for a
- * `src` it can't actually resolve. */
-function fireIframeLoad(iframe: HTMLIFrameElement) {
-  fireEvent(iframe, new Event('load'))
-}
-
 describe('ThemeSync (rendering)', () => {
-  it('renders a hidden iframe pointed at `${hubOrigin}/theme-sync.html`', () => {
-    const { iframe } = renderThemeSync()
-
-    expect(iframe.src).toBe(`${HUB_ORIGIN}/theme-sync.html`)
-    expect(iframe.getAttribute('aria-hidden')).toBe('true')
-  })
-
-  it('the iframe has a `contentWindow` available in jsdom, even without a real cross-origin navigation', () => {
-    const { iframe } = renderThemeSync()
-    expect(iframe.contentWindow).not.toBeNull()
+  it('renders nothing visible', () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(true, { theme: null, updatedAt: 0 }))
+    const { container } = render(<ThemeSync apiOrigin={API_ORIGIN} />)
+    expect(container).toBeEmptyDOMElement()
   })
 })
 
-describe('ThemeSync (hello handshake on iframe load)', () => {
-  it('posts a schloss-theme-sync:hello message to the iframe, targeted at hubOrigin, once it loads', () => {
-    const { iframe } = renderThemeSync()
-    const postMessageSpy = vi.spyOn(iframe.contentWindow as Window, 'postMessage')
+describe('ThemeSync (initial GET)', () => {
+  it('calls fetch on mount with a plain GET to `${apiOrigin}/theme` (no special headers/options)', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(true, { theme: null, updatedAt: 0 }))
+    render(<ThemeSync apiOrigin={API_ORIGIN} />)
 
-    fireIframeLoad(iframe)
-
-    expect(postMessageSpy).toHaveBeenCalledWith(
-      { type: 'schloss-theme-sync:hello' },
-      HUB_ORIGIN,
-    )
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    expect(fetchMock.mock.calls[0]).toEqual([THEME_URL])
   })
 
-  it('does not post the hello message before the iframe has fired its load event', () => {
-    const { iframe } = renderThemeSync()
-    const postMessageSpy = vi.spyOn(iframe.contentWindow as Window, 'postMessage')
+  it('does nothing when the response is not ok', async () => {
+    localStorage.setItem(STORAGE_KEY, 'light')
+    localStorage.setItem(UPDATED_AT_KEY, '10')
+    fetchMock.mockResolvedValueOnce(jsonResponse(false, { theme: 'dark', updatedAt: 999999999999 }))
 
-    expect(postMessageSpy).not.toHaveBeenCalled()
-  })
-})
+    render(<ThemeSync apiOrigin={API_ORIGIN} />)
+    await flush()
 
-describe('ThemeSync (receiving a value message from the hub)', () => {
-  it('adopts the hub theme via applyTheme(theme, updatedAt) when the hub value is newer than the local one', () => {
-    const { iframe } = renderThemeSync()
-    fireIframeLoad(iframe)
-
-    localStorage.setItem(THEME_KEY, 'light')
-    localStorage.setItem(UPDATED_AT_KEY, '1000')
-
-    fireEvent(
-      window,
-      new MessageEvent('message', {
-        origin: HUB_ORIGIN,
-        data: { type: 'schloss-theme-sync:value', theme: 'dark', updatedAt: 2000 },
-      }),
-    )
-
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
-    expect(getStoredTheme()).toBe('dark')
-    expect(getThemeUpdatedAt()).toBe(2000)
-  })
-
-  it('posts a push message back to the hub when the local value is newer than the hub one', () => {
-    const { iframe } = renderThemeSync()
-    fireIframeLoad(iframe)
-    const postMessageSpy = vi.spyOn(iframe.contentWindow as Window, 'postMessage')
-
-    localStorage.setItem(THEME_KEY, 'sepia')
-    localStorage.setItem(UPDATED_AT_KEY, '5000')
-
-    fireEvent(
-      window,
-      new MessageEvent('message', {
-        origin: HUB_ORIGIN,
-        data: { type: 'schloss-theme-sync:value', theme: 'light', updatedAt: 1000 },
-      }),
-    )
-
-    expect(postMessageSpy).toHaveBeenCalledWith(
-      { type: 'schloss-theme-sync:push', theme: 'sepia', updatedAt: 5000 },
-      HUB_ORIGIN,
-    )
-    // and it must not have adopted the (older/stale) hub value
-    expect(document.documentElement.getAttribute('data-theme')).not.toBe('light')
-  })
-
-  it('does nothing when the timestamps are equal', () => {
-    const { iframe } = renderThemeSync()
-    fireIframeLoad(iframe)
-
-    localStorage.setItem(THEME_KEY, 'oled')
-    localStorage.setItem(UPDATED_AT_KEY, '3000')
-
-    const postMessageSpy = vi.spyOn(iframe.contentWindow as Window, 'postMessage')
-
-    fireEvent(
-      window,
-      new MessageEvent('message', {
-        origin: HUB_ORIGIN,
-        data: { type: 'schloss-theme-sync:value', theme: 'dark', updatedAt: 3000 },
-      }),
-    )
-
-    expect(document.documentElement.getAttribute('data-theme')).not.toBe('dark')
-    expect(getStoredTheme()).toBe('oled')
-    expect(postMessageSpy).not.toHaveBeenCalled()
-  })
-
-  it('does nothing when the hub theme is null/invalid, even if updatedAt is newer', () => {
-    const { iframe } = renderThemeSync()
-    fireIframeLoad(iframe)
-
-    localStorage.setItem(THEME_KEY, 'oled')
-    localStorage.setItem(UPDATED_AT_KEY, '1000')
-
-    const postMessageSpy = vi.spyOn(iframe.contentWindow as Window, 'postMessage')
-
-    fireEvent(
-      window,
-      new MessageEvent('message', {
-        origin: HUB_ORIGIN,
-        data: { type: 'schloss-theme-sync:value', theme: null, updatedAt: 9999 },
-      }),
-    )
-
-    expect(document.documentElement.getAttribute('data-theme')).not.toBe('9999')
-    expect(getStoredTheme()).toBe('oled')
-    expect(getThemeUpdatedAt()).toBe(1000)
-    expect(postMessageSpy).not.toHaveBeenCalled()
-  })
-})
-
-describe('ThemeSync (untrusted origin is ignored)', () => {
-  it('ignores a well-formed value message from an origin that does not match hubOrigin', () => {
-    const { iframe } = renderThemeSync()
-    fireIframeLoad(iframe)
-
-    localStorage.setItem(THEME_KEY, 'light')
-    localStorage.setItem(UPDATED_AT_KEY, '1000')
-
-    const postMessageSpy = vi.spyOn(iframe.contentWindow as Window, 'postMessage')
-
-    fireEvent(
-      window,
-      new MessageEvent('message', {
-        origin: 'https://evil.example.com',
-        data: { type: 'schloss-theme-sync:value', theme: 'dark', updatedAt: 999999 },
-      }),
-    )
-
-    expect(document.documentElement.getAttribute('data-theme')).not.toBe('dark')
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull()
     expect(getStoredTheme()).toBe('light')
-    expect(getThemeUpdatedAt()).toBe(1000)
-    expect(postMessageSpy).not.toHaveBeenCalled()
+    expect(getThemeUpdatedAt()).toBe(10)
+    expect(fetchMock).toHaveBeenCalledTimes(1) // GET only, no PUT
+  })
+
+  it('does not throw and does nothing when fetch itself rejects (network error)', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('network down'))
+
+    expect(() => render(<ThemeSync apiOrigin={API_ORIGIN} />)).not.toThrow()
+    await flush()
+
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does nothing when the parsed response body is null', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(true, null))
+
+    render(<ThemeSync apiOrigin={API_ORIGIN} />)
+    await flush()
+
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not throw and does nothing when parsing the response body throws', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.reject(new Error('bad json')),
+    } as Response)
+
+    expect(() => render(<ThemeSync apiOrigin={API_ORIGIN} />)).not.toThrow()
+    await flush()
+
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
 
-describe('ThemeSync (pushing local THEME_CHANGE_EVENT changes to the hub)', () => {
-  it('pushes the new theme/updatedAt to the hub when THEME_CHANGE_EVENT fires after the iframe has loaded', () => {
-    const { iframe } = renderThemeSync()
-    fireIframeLoad(iframe)
-    const postMessageSpy = vi.spyOn(iframe.contentWindow as Window, 'postMessage')
+describe('ThemeSync (adopting a newer server theme)', () => {
+  it('calls applyTheme with the server theme and its exact updatedAt when the server is newer', async () => {
+    localStorage.setItem(STORAGE_KEY, 'light')
+    localStorage.setItem(UPDATED_AT_KEY, '100')
+    fetchMock.mockResolvedValueOnce(jsonResponse(true, { theme: 'dark', updatedAt: 200 }))
 
-    applyTheme('dark', 8080)
+    render(<ThemeSync apiOrigin={API_ORIGIN} />)
 
-    expect(postMessageSpy).toHaveBeenCalledWith(
-      { type: 'schloss-theme-sync:push', theme: 'dark', updatedAt: 8080 },
-      HUB_ORIGIN,
-    )
+    await waitFor(() => {
+      expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    })
+    expect(getStoredTheme()).toBe('dark')
+    expect(getThemeUpdatedAt()).toBe(200)
+
+    // applyTheme() itself dispatches THEME_CHANGE_EVENT (see theme.ts), and
+    // the component's own listener for that event (behavior 4) has no way
+    // to distinguish "its own adoption" from any other source - so this
+    // adoption is followed by the component echoing the very value it just
+    // adopted back to the server as an independent PUT.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit]
+    expect(url).toBe(THEME_URL)
+    expect(init.method).toBe('PUT')
+    expect(init.keepalive).toBe(true)
+    expect(JSON.parse(init.body as string)).toEqual({ theme: 'dark', updatedAt: 200 })
   })
 
-  it('does not push when THEME_CHANGE_EVENT fires before the iframe has fired its load event', () => {
-    const { iframe } = renderThemeSync()
-    const postMessageSpy = vi.spyOn(iframe.contentWindow as Window, 'postMessage')
+  it('ignores an invalid theme value from the server even when its updatedAt is newer, and sends no PUT (local is not newer)', async () => {
+    localStorage.setItem(STORAGE_KEY, 'light')
+    localStorage.setItem(UPDATED_AT_KEY, '10')
+    fetchMock.mockResolvedValueOnce(jsonResponse(true, { theme: 'neon', updatedAt: 999 }))
 
-    applyTheme('sepia', 4040)
+    render(<ThemeSync apiOrigin={API_ORIGIN} />)
+    await flush()
 
-    expect(postMessageSpy).not.toHaveBeenCalled()
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull()
+    expect(getStoredTheme()).toBe('light')
+    expect(getThemeUpdatedAt()).toBe(10)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('ThemeSync (pushing a newer local theme)', () => {
+  it('PUTs the current local theme+updatedAt (with keepalive: true) when local is newer than the server', async () => {
+    localStorage.setItem(STORAGE_KEY, 'sepia')
+    localStorage.setItem(UPDATED_AT_KEY, '500')
+    fetchMock.mockResolvedValueOnce(jsonResponse(true, { theme: 'light', updatedAt: 100 }))
+
+    render(<ThemeSync apiOrigin={API_ORIGIN} />)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit]
+    expect(url).toBe(THEME_URL)
+    expect(init.method).toBe('PUT')
+    expect(init.keepalive).toBe(true)
+    expect(JSON.parse(init.body as string)).toEqual({ theme: 'sepia', updatedAt: 500 })
+
+    // applyTheme was NOT called - the server value must not have been adopted.
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull()
+    expect(getStoredTheme()).toBe('sepia')
+    expect(getThemeUpdatedAt()).toBe(500)
+  })
+
+  it('still PUTs the local theme when the server theme is null, as long as local is newer', async () => {
+    localStorage.setItem(STORAGE_KEY, 'dark')
+    localStorage.setItem(UPDATED_AT_KEY, '50')
+    fetchMock.mockResolvedValueOnce(jsonResponse(true, { theme: null, updatedAt: 10 }))
+
+    render(<ThemeSync apiOrigin={API_ORIGIN} />)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    const [, init] = fetchMock.mock.calls[1] as [string, RequestInit]
+    expect(init.method).toBe('PUT')
+    expect(init.keepalive).toBe(true)
+    expect(JSON.parse(init.body as string)).toEqual({ theme: 'dark', updatedAt: 50 })
+  })
+})
+
+describe('ThemeSync (no-op on equal timestamps)', () => {
+  it('does nothing when the local and server updatedAt values are equal', async () => {
+    localStorage.setItem(STORAGE_KEY, 'oled')
+    localStorage.setItem(UPDATED_AT_KEY, '300')
+    fetchMock.mockResolvedValueOnce(jsonResponse(true, { theme: 'light', updatedAt: 300 }))
+
+    render(<ThemeSync apiOrigin={API_ORIGIN} />)
+    await flush()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1) // GET only - no applyTheme, no PUT
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull()
+    expect(getStoredTheme()).toBe('oled')
+    expect(getThemeUpdatedAt()).toBe(300)
+  })
+})
+
+describe('ThemeSync (THEME_CHANGE_EVENT -> PUT)', () => {
+  it('sends a PUT with the event detail (and keepalive: true) whenever THEME_CHANGE_EVENT fires', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(true, { theme: null, updatedAt: 0 }))
+    render(<ThemeSync apiOrigin={API_ORIGIN} />)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+
+    act(() => {
+      applyTheme('dark', 12345)
+    })
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit]
+    expect(url).toBe(THEME_URL)
+    expect(init.method).toBe('PUT')
+    expect(init.keepalive).toBe(true)
+    expect(JSON.parse(init.body as string)).toEqual({ theme: 'dark', updatedAt: 12345 })
+  })
+
+  it('sends an independent PUT for each subsequent THEME_CHANGE_EVENT dispatch', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(true, { theme: null, updatedAt: 0 }))
+    render(<ThemeSync apiOrigin={API_ORIGIN} />)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+
+    act(() => {
+      applyTheme('dark', 111)
+    })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+
+    act(() => {
+      applyTheme('light', 222)
+    })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
+
+    const secondPut = fetchMock.mock.calls[1] as [string, RequestInit]
+    const thirdPut = fetchMock.mock.calls[2] as [string, RequestInit]
+    expect(JSON.parse(secondPut[1].body as string)).toEqual({ theme: 'dark', updatedAt: 111 })
+    expect(JSON.parse(thirdPut[1].body as string)).toEqual({ theme: 'light', updatedAt: 222 })
+  })
+
+  it('fires its own PUT for THEME_CHANGE_EVENT even before the initial GET has resolved', async () => {
+    let resolveGet!: (value: Response) => void
+    const pendingGet = new Promise<Response>((resolve) => {
+      resolveGet = resolve
+    })
+    fetchMock.mockImplementationOnce(() => pendingGet)
+
+    render(<ThemeSync apiOrigin={API_ORIGIN} />)
+
+    act(() => {
+      applyTheme('sepia', 777)
+    })
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit]
+    expect(url).toBe(THEME_URL)
+    expect(init.method).toBe('PUT')
+    expect(init.keepalive).toBe(true)
+    expect(JSON.parse(init.body as string)).toEqual({ theme: 'sepia', updatedAt: 777 })
+
+    // Resolve the still-pending GET afterward so it can't leak into other
+    // tests or surface as an unhandled rejection.
+    resolveGet(jsonResponse(true, { theme: null, updatedAt: 0 }))
+    await flush()
   })
 })
 
 describe('ThemeSync (unmount cleanup)', () => {
-  it('removes its window listeners on unmount so events fired afterwards have no effect and do not throw', () => {
-    const { iframe, unmount } = renderThemeSync()
-    fireIframeLoad(iframe)
+  it('removes its THEME_CHANGE_EVENT listener on unmount, so a later dispatch triggers no further PUT', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(true, { theme: null, updatedAt: 0 }))
+    const { unmount } = render(<ThemeSync apiOrigin={API_ORIGIN} />)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
 
     unmount()
 
-    localStorage.setItem(THEME_KEY, 'light')
-    localStorage.setItem(UPDATED_AT_KEY, '1000')
+    act(() => {
+      applyTheme('dark', 999)
+    })
+    await flush()
 
-    expect(() => {
-      fireEvent(
-        window,
-        new MessageEvent('message', {
-          origin: HUB_ORIGIN,
-          data: { type: 'schloss-theme-sync:value', theme: 'dark', updatedAt: 2000 },
-        }),
-      )
-      window.dispatchEvent(
-        new CustomEvent(THEME_CHANGE_EVENT, { detail: { theme: 'dark', updatedAt: 2000 } }),
-      )
-    }).not.toThrow()
-
-    // The unmounted instance's listener must not have applied the hub value.
-    expect(document.documentElement.getAttribute('data-theme')).not.toBe('dark')
-    expect(getStoredTheme()).toBe('light')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
