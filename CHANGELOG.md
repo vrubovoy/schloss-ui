@@ -175,3 +175,12 @@ fit best; add a new section if none fits.
   centers by box height but not by glyph baseline - next to plain text at
   a different font-size, the two looked slightly off-level from each
   other. Now sets an explicit `lineHeight: 1`.
+- `ThemeToggle`'s dropdown panel was `position: absolute`, clipped by any
+  ancestor's `overflow: hidden` and always opening downward with no
+  check for available space - it ran off-screen/got clipped when the
+  trigger sat near the bottom of a short or height-locked viewport (e.g.
+  kuvert's sidebar). Adapted the same portal + measured
+  viewport-correction technique `CalendarPopover` already uses: portals
+  to `document.body`, positions with `position: fixed` from
+  `getBoundingClientRect()`, and nudges itself back on-screen once its
+  real size is known.
