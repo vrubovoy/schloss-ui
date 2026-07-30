@@ -210,3 +210,18 @@ fit best; add a new section if none fits.
   already stored (0 if nothing ever was) - only an explicit timestamp
   (a real `ThemeToggle` selection, or `ThemeSync` adopting a hub value)
   counts as a real preference change.
+- Cross-origin theme sync still didn't actually work even after the fix
+  above, for a much bigger reason: `ThemeSync`'s hidden-iframe + `postMessage`
+  design read/wrote the hub page's own `localStorage`, and Firefox's Total
+  Cookie Protection (also Safari's ITP) partitions a third-party iframe's
+  storage - and `BroadcastChannel` - by whichever site embeds it. The exact
+  same hub page embedded in two different apps saw two completely separate
+  storage buckets; nothing could ever actually sync between them,
+  independent of any application-level bug. Replaced the whole iframe/
+  postMessage/`BroadcastChannel` mechanism with a plain `fetch` against a
+  real API endpoint (`GET`/`PUT /theme`, added to schlussel) - a fetch
+  response isn't subject to storage partitioning at all, since it never
+  touches the target origin's client-side storage. `ThemeSync`'s prop is
+  now `apiOrigin` (was `hubOrigin`), and it renders nothing (was a hidden
+  `<iframe>`). Writes use `fetch(..., { keepalive: true })` so a push
+  survives the page navigating away immediately afterward.

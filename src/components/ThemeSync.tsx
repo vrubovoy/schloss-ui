@@ -1,98 +1,87 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import {
   type Theme, THEMES, THEME_CHANGE_EVENT, type ThemeChangeDetail,
   applyTheme, getStoredTheme, getThemeUpdatedAt,
 } from '../lib/theme'
 
-const HUB_PATH = '/theme-sync.html'
-const HELLO: HubMessage = { type: 'schloss-theme-sync:hello' }
-
-type HubMessage =
-  | { type: 'schloss-theme-sync:hello' }
-  | { type: 'schloss-theme-sync:value'; theme: Theme | null; updatedAt: number }
-  | { type: 'schloss-theme-sync:push'; theme: Theme; updatedAt: number }
+const THEME_PATH = '/theme'
 
 function isTheme(value: unknown): value is Theme {
   return typeof value === 'string' && (THEMES as string[]).includes(value)
 }
 
+interface ThemeResponse {
+  theme: Theme | null
+  updatedAt: number
+}
+
 export interface ThemeSyncProps {
-  /** Origin hosting the shared theme-sync hub page (schlussel - it's
-   * already the platform's account/identity authority, so it doubles as
-   * the shared store for this one small preference too), e.g.
+  /** Origin hosting schlussel's shared `/theme` API (it's already the
+   * platform's account/identity authority, so it doubles as the shared
+   * store for this one small preference too), e.g.
    * `"https://auth.example.com"`. No trailing slash, no path. */
-  hubOrigin: string
+  apiOrigin: string
+}
+
+function push(apiOrigin: string, theme: Theme, updatedAt: number) {
+  // `keepalive` lets this survive the page unloading right after a theme
+  // change (e.g. the visitor immediately navigates to another app) - a
+  // plain fetch would otherwise risk being aborted mid-flight and the
+  // pushed value never actually reaching the API.
+  void fetch(`${apiOrigin}${THEME_PATH}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ theme, updatedAt }),
+    keepalive: true,
+  }).catch(() => {})
 }
 
 // The platform's three apps each live on their own subdomain (separate
 // origins), so localStorage can't be shared between them directly (see
 // theme.ts) - this keeps the light/dark/etc. theme preference in sync
-// across all of them anyway. Mounts a hidden iframe pointing at
-// schlussel's own `/theme-sync.html` and exchanges postMessage with it:
-// on load, ask the hub for its value and adopt it here if it's newer than
-// what's stored locally (or push this origin's value to the hub if it's
-// the newer one); whenever the theme changes locally afterwards (via
-// ThemeToggle, anywhere on the page), push the new value to the hub
-// immediately so it's ready the next time another origin asks.
-export function ThemeSync({ hubOrigin }: ThemeSyncProps) {
-  const iframeRef = useRef<HTMLIFrameElement>(null)
-  const readyRef = useRef(false)
-
+// across all of them anyway, via a plain cross-origin fetch to schlussel's
+// shared `/theme` API (CORS-enabled there).
+//
+// An earlier version of this did the same thing through a hidden iframe +
+// postMessage + the iframe's own localStorage, reasoning that a shared
+// origin's storage would sync across embeds. It doesn't: Firefox's Total
+// Cookie Protection (and Safari's ITP) partitions localStorage - and
+// BroadcastChannel - inside a third-party iframe by whichever site embeds
+// it, so the exact same hub page embedded in two different apps saw two
+// completely separate storage buckets and never actually synced anything.
+// A plain fetch response isn't subject to that at all, since it doesn't
+// touch any client-side storage belonging to the target origin.
+export function ThemeSync({ apiOrigin }: ThemeSyncProps) {
   useEffect(() => {
-    readyRef.current = false
+    let cancelled = false
 
-    function post(message: HubMessage) {
-      iframeRef.current?.contentWindow?.postMessage(message, hubOrigin)
-    }
-
-    function onMessage(event: MessageEvent) {
-      if (event.origin !== hubOrigin) return
-      const data = event.data as HubMessage
-      if (data?.type !== 'schloss-theme-sync:value') return
-
-      const localUpdatedAt = getThemeUpdatedAt()
-      if (isTheme(data.theme) && data.updatedAt > localUpdatedAt) {
-        applyTheme(data.theme, data.updatedAt)
-      } else if (localUpdatedAt > data.updatedAt) {
-        // This origin's own value is newer than what the hub has (e.g.
-        // it's never heard from this app before, or missed an earlier
-        // update) - push it so the hub (and the next origin to ask) picks
-        // it up.
-        post({ type: 'schloss-theme-sync:push', theme: getStoredTheme(), updatedAt: localUpdatedAt })
-      }
-    }
-
-    function onLoad() {
-      readyRef.current = true
-      post(HELLO)
-    }
+    fetch(`${apiOrigin}${THEME_PATH}`)
+      .then((res) => (res.ok ? (res.json() as Promise<ThemeResponse>) : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        const localUpdatedAt = getThemeUpdatedAt()
+        if (isTheme(data.theme) && data.updatedAt > localUpdatedAt) {
+          applyTheme(data.theme, data.updatedAt)
+        } else if (localUpdatedAt > data.updatedAt) {
+          // This origin's own value is newer than what the API has (e.g.
+          // it's never heard from this app before) - push it so the next
+          // origin to ask picks it up.
+          push(apiOrigin, getStoredTheme(), localUpdatedAt)
+        }
+      })
+      .catch(() => {})
 
     function onLocalThemeChange(event: Event) {
-      if (!readyRef.current) return
       const { theme, updatedAt } = (event as CustomEvent<ThemeChangeDetail>).detail
-      post({ type: 'schloss-theme-sync:push', theme, updatedAt })
+      push(apiOrigin, theme, updatedAt)
     }
 
-    window.addEventListener('message', onMessage)
     window.addEventListener(THEME_CHANGE_EVENT, onLocalThemeChange)
-    const iframe = iframeRef.current
-    iframe?.addEventListener('load', onLoad)
-
     return () => {
-      window.removeEventListener('message', onMessage)
+      cancelled = true
       window.removeEventListener(THEME_CHANGE_EVENT, onLocalThemeChange)
-      iframe?.removeEventListener('load', onLoad)
     }
-  }, [hubOrigin])
+  }, [apiOrigin])
 
-  return (
-    <iframe
-      ref={iframeRef}
-      src={`${hubOrigin}${HUB_PATH}`}
-      title="theme-sync"
-      aria-hidden="true"
-      tabIndex={-1}
-      style={{ display: 'none' }}
-    />
-  )
+  return null
 }
