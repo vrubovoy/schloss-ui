@@ -102,6 +102,18 @@ fit best; add a new section if none fits.
   small link when `helpHref` is set (fully backward compatible
   otherwise) - lets every consuming app link to its own in-app usage
   guide the same way.
+- New `ThemeSync` component: mounts a hidden iframe pointing at a
+  cross-origin "hub" page (schlussel's `/theme-sync.html`) and exchanges
+  `postMessage` with it to keep the shared theme preference in sync
+  across the platform's separate-origin apps, which can't read each
+  other's `localStorage` directly. Last-write-wins by timestamp -
+  `theme.ts`'s `applyTheme` now optionally takes an explicit `updatedAt`
+  (defaults to preserving whatever's already stored, NOT a fresh
+  `Date.now()`, so a mere page reload doesn't look like a new preference
+  change) and dispatches a `THEME_CHANGE_EVENT` on `window` so `ThemeSync`
+  can react without polling. `ThemeToggle`'s own selection now stamps a
+  real fresh timestamp, since that's the one place an actual user choice
+  happens.
 
 ## Icons
 - Not a component - a written contract (in README.md), so icon usage
