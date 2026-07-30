@@ -1,4 +1,5 @@
-import { useState, useEffect, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Sun, Moon, Monitor, Coffee } from 'lucide-react'
 import { Button } from './Button'
 import { type Theme, THEMES, getStoredTheme, applyTheme } from '../lib/theme'
@@ -16,6 +17,11 @@ const LABELS: Record<Theme, string> = {
   oled: 'OLED',
   sepia: 'Сепия',
 }
+
+// Matches the panel's own `minWidth` below - used only as pass-1's guess
+// before the panel's real rendered width is known (see the second
+// positioning effect).
+const PANEL_WIDTH_GUESS = 140
 
 export interface ThemeToggleTriggerProps {
   theme: Theme
@@ -41,10 +47,55 @@ export interface ThemeToggleProps {
 export function ThemeToggle({ trigger, align = 'right' }: ThemeToggleProps) {
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
   const [open, setOpen] = useState(false)
+  const anchorRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
+  // Guards the pass-2 correction below so it only ever runs once per open -
+  // without this, each correction would trigger the effect again via the
+  // `position` state change it causes, forever re-measuring.
+  const correctedRef = useRef(false)
 
   useEffect(() => {
     applyTheme(theme)
   }, [theme])
+
+  // Pass 1: guess a position directly under the trigger, aligned per
+  // `align`, before the panel's real size is known.
+  useLayoutEffect(() => {
+    correctedRef.current = false
+    if (!open) {
+      setPosition(null)
+      return
+    }
+    const rect = anchorRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setPosition({
+      top: rect.bottom + 8,
+      left: align === 'right' ? rect.right - PANEL_WIDTH_GUESS : rect.left,
+    })
+  }, [open, align])
+
+  // Pass 2: now that the panel is actually in the DOM, measure its real
+  // size and correct just enough to keep it fully on-screen, staying
+  // visually anchored to the trigger rather than jumping elsewhere - this
+  // is what fixes the panel running off the bottom of a short viewport
+  // (e.g. a trigger near the bottom of a sidebar). Portaled to
+  // `document.body` with `position: fixed` (viewport coordinates) instead
+  // of `position: absolute` relative to a local ancestor, so it's never
+  // clipped by an ancestor's `overflow: hidden` (e.g. the app shell's own
+  // height-locked root) either.
+  useLayoutEffect(() => {
+    if (!position || !panelRef.current || !anchorRef.current || correctedRef.current) return
+    correctedRef.current = true
+    const anchorRect = anchorRef.current.getBoundingClientRect()
+    const panelRect = panelRef.current.getBoundingClientRect()
+    let top = position.top
+    let left = align === 'right' ? anchorRect.right - panelRect.width : position.left
+    const bottomOverflow = panelRect.bottom - window.innerHeight
+    if (bottomOverflow > 0) top = Math.max(8, top - bottomOverflow - 8)
+    left = Math.min(Math.max(8, left), window.innerWidth - panelRect.width - 8)
+    setPosition({ top, left })
+  }, [position, align])
 
   function select(t: Theme) {
     setTheme(t)
@@ -54,7 +105,7 @@ export function ThemeToggle({ trigger, align = 'right' }: ThemeToggleProps) {
   const toggleOpen = () => setOpen((o) => !o)
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={anchorRef} style={{ display: 'inline-block' }}>
       {trigger ? (
         trigger({ theme, icon: ICONS[theme], onClick: toggleOpen })
       ) : (
@@ -68,19 +119,20 @@ export function ThemeToggle({ trigger, align = 'right' }: ThemeToggleProps) {
         </Button>
       )}
 
-      {open && (
+      {open && position && createPortal(
         <>
           <div
             style={{ position: 'fixed', inset: 0, zIndex: 40 }}
             onClick={() => setOpen(false)}
           />
           <div
+            ref={panelRef}
             style={{
-              position: 'absolute',
-              [align]: 0,
-              top: 'calc(100% + 8px)',
+              position: 'fixed',
+              top: position.top,
+              left: position.left,
               zIndex: 50,
-              minWidth: 140,
+              minWidth: PANEL_WIDTH_GUESS,
               padding: '0.375rem',
               display: 'flex',
               flexDirection: 'column',
@@ -120,7 +172,8 @@ export function ThemeToggle({ trigger, align = 'right' }: ThemeToggleProps) {
               </button>
             ))}
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   )

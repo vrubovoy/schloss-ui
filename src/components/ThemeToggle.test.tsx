@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeToggle } from './ThemeToggle'
@@ -101,7 +101,7 @@ describe('ThemeToggle (default trigger)', () => {
   it('closes the menu when clicking outside, without changing the current theme', async () => {
     const user = userEvent.setup()
     localStorage.setItem('schloss-theme', 'sepia')
-    const { container } = render(
+    render(
       <div>
         <ThemeToggle />
         <button type="button" data-testid="outside">
@@ -117,8 +117,12 @@ describe('ThemeToggle (default trigger)', () => {
     // behind the menu panel specifically to catch "click outside" (jsdom
     // does no real hit-testing/z-index layering, so a click fired at an
     // arbitrary sibling element doesn't reach it the way a real browser
-    // click would - the backdrop itself must be the event target).
-    const backdrop = container.querySelector<HTMLElement>(
+    // click would - the backdrop itself must be the event target). Both
+    // the backdrop and the menu panel are portaled to document.body (so
+    // the panel can't be clipped by an ancestor's `overflow: hidden`), so
+    // this queries the whole document rather than the local render
+    // container.
+    const backdrop = document.body.querySelector<HTMLElement>(
       'div[style*="position: fixed"]',
     )
     if (!backdrop) throw new Error('outside-click backdrop not found')
@@ -228,5 +232,179 @@ describe('ThemeToggle (align prop)', () => {
 
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
     expect(localStorage.getItem('schloss-theme')).toBe('light')
+  })
+})
+
+describe('ThemeToggle (portal to document.body)', () => {
+  it('portals the open panel to document.body rather than leaving it inside the local render container', async () => {
+    const user = userEvent.setup()
+    const { container } = render(<ThemeToggle />)
+
+    await user.click(screen.getByRole('button', { name: 'Сменить тему' }))
+
+    const optionButton = screen.getByRole('button', { name: 'Светлая' })
+
+    // The panel's option buttons must not live inside the component's own
+    // local render container...
+    expect(container.contains(optionButton)).toBe(false)
+    // ...but they must be found somewhere under document.body.
+    expect(document.body.contains(optionButton)).toBe(true)
+
+    // Walking all the way up from the option button should land exactly on
+    // document.body - i.e. it was appended directly under body via a
+    // portal, not nested inside the local container tree at all.
+    let node: HTMLElement | null = optionButton
+    while (node.parentElement && node !== document.body) {
+      node = node.parentElement
+    }
+    expect(node).toBe(document.body)
+  })
+})
+
+describe('ThemeToggle (viewport-aware panel positioning)', () => {
+  const realGetBoundingClientRect = Element.prototype.getBoundingClientRect
+  let originalInnerHeight: number
+
+  beforeEach(() => {
+    originalInnerHeight = window.innerHeight
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    Element.prototype.getBoundingClientRect = realGetBoundingClientRect
+    Object.defineProperty(window, 'innerHeight', {
+      value: originalInnerHeight,
+      configurable: true,
+    })
+  })
+
+  // Locate the panel's own positioned wrapper by walking up from one of its
+  // option buttons to the nearest ancestor styled with `position: fixed`
+  // (per spec, the panel itself is positioned this way once portaled).
+  function findPanelElement(): HTMLElement {
+    const anchor = screen.getByRole('button', { name: 'Светлая' })
+    let node: HTMLElement | null = anchor.parentElement
+    while (node) {
+      if (node.style.position === 'fixed') return node
+      node = node.parentElement
+    }
+    throw new Error('panel wrapper (position: fixed) not found')
+  }
+
+  function mockRects(triggerEl: Element, triggerRect: DOMRect, panelRect: DOMRect) {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      // The component positions the panel relative to whichever element its
+      // trigger measurement targets - this may be the trigger button itself,
+      // or a local wrapper element around it (e.g. the `display:
+      // inline-block` div this library wraps triggers in, a holdover from
+      // when the panel used to be absolutely positioned relative to that
+      // wrapper). Matching any DIV ancestor-or-self of the trigger (other
+      // than body/documentElement) keeps this robust to either.
+      if (
+        this === triggerEl ||
+        (this instanceof HTMLDivElement &&
+          this !== document.body &&
+          this !== document.documentElement &&
+          this.contains(triggerEl))
+      ) {
+        return triggerRect
+      }
+      if (
+        this instanceof HTMLElement &&
+        this.style.position === 'fixed' &&
+        this.querySelector('button')
+      ) {
+        return panelRect
+      }
+      return realGetBoundingClientRect.call(this)
+    })
+  }
+
+  it('nudges the panel up so it stays within a short viewport instead of overflowing the bottom', async () => {
+    const user = userEvent.setup()
+    Object.defineProperty(window, 'innerHeight', { value: 150, configurable: true })
+
+    const triggerRect = {
+      top: 100,
+      bottom: 140,
+      left: 50,
+      right: 130,
+      width: 80,
+      height: 40,
+      x: 50,
+      y: 100,
+      toJSON() {},
+    } as DOMRect
+    const PANEL_HEIGHT = 80
+    const panelRect = {
+      top: 140,
+      bottom: 140 + PANEL_HEIGHT,
+      left: 50,
+      right: 350,
+      width: 300,
+      height: PANEL_HEIGHT,
+      x: 50,
+      y: 140,
+      toJSON() {},
+    } as DOMRect
+
+    render(<ThemeToggle />)
+    const trigger = screen.getByRole('button', { name: 'Сменить тему' })
+    mockRects(trigger, triggerRect, panelRect)
+
+    await user.click(trigger)
+
+    const panel = findPanelElement()
+    const top = parseFloat(panel.style.top || '0')
+
+    // A naive first-pass guess (placing the panel right below the trigger,
+    // at its bottom edge of 140) combined with the panel's real height (80)
+    // would overflow the mocked 150px viewport. Once the real size is
+    // known, the panel must be nudged up so it no longer overflows.
+    expect(top).toBeLessThan(triggerRect.bottom)
+    expect(top + PANEL_HEIGHT).toBeLessThanOrEqual(window.innerHeight)
+  })
+
+  it('aligns the panel right edge to the trigger right edge using the real measured width (align="right", the default)', async () => {
+    const user = userEvent.setup()
+
+    const triggerRect = {
+      top: 50,
+      bottom: 90,
+      left: 200,
+      right: 280,
+      width: 80,
+      height: 40,
+      x: 200,
+      y: 50,
+      toJSON() {},
+    } as DOMRect
+    const PANEL_WIDTH = 150
+    const panelRect = {
+      top: 90,
+      bottom: 190,
+      left: 0,
+      right: PANEL_WIDTH,
+      width: PANEL_WIDTH,
+      height: 100,
+      x: 0,
+      y: 90,
+      toJSON() {},
+    } as DOMRect
+
+    render(<ThemeToggle align="right" />)
+    const trigger = screen.getByRole('button', { name: 'Сменить тему' })
+    mockRects(trigger, triggerRect, panelRect)
+
+    await user.click(trigger)
+
+    const panel = findPanelElement()
+    const left = parseFloat(panel.style.left || '0')
+
+    // The panel's right edge (left + real measured width) must land exactly
+    // on the trigger's right edge, not the pass-1 guess.
+    expect(left + PANEL_WIDTH).toBeCloseTo(triggerRect.right, 5)
   })
 })
