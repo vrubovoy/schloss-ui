@@ -55,9 +55,15 @@ export function ThemeToggle({ trigger, align = 'right' }: ThemeToggleProps) {
   // `position` state change it causes, forever re-measuring.
   const correctedRef = useRef(false)
 
+  // Mount-only: reflects whatever's already stored onto the document (in
+  // case nothing else on the page did yet) without declaring a fresh
+  // preference change - `select` below is the only place that does that,
+  // with an explicit timestamp, since it's the only place a real user
+  // choice happens.
   useEffect(() => {
     applyTheme(theme)
-  }, [theme])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Pass 1: guess a position directly under the trigger, aligned per
   // `align`, before the panel's real size is known.
@@ -98,6 +104,7 @@ export function ThemeToggle({ trigger, align = 'right' }: ThemeToggleProps) {
   }, [position, align])
 
   function select(t: Theme) {
+    applyTheme(t, Date.now())
     setTheme(t)
     setOpen(false)
   }
