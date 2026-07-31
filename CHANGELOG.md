@@ -225,3 +225,21 @@ fit best; add a new section if none fits.
   now `apiOrigin` (was `hubOrigin`), and it renders nothing (was a hidden
   `<iframe>`). Writes use `fetch(..., { keepalive: true })` so a push
   survives the page navigating away immediately afterward.
+
+## Auth & sidebar kit
+- New `src/auth/` module: `generateCodeVerifier`/`generateCodeChallenge`
+  (PKCE, moved as-is from kuvert), `buildLoginUrl`/`buildLogoutUrl`/
+  `buildAccountUrl` (generalized from kuvert's hardcoded
+  `VITE_SCHLUSSEL_URL` to a passed-in `{ schluesselUrl }` config),
+  `createApiClient({ base, authBase?, onUnauthorized })` (in-memory-token
+  API client with auto-retry-once on 401 via a refresh call), and
+  `AuthContext`/`useAuth`/`useAuthProvider({ apiClient, authBase? })`
+  (silent-refresh-on-mount auth state) - all generalizing kuvert's own
+  `lib/{pkce,authRedirect,api}.ts` and `hooks/useAuth.ts` from hardcoded
+  env reads into config objects, so every app on the platform can share
+  the identical PKCE/token/refresh logic instead of copy-pasting it.
+- New `useSidebarWidth({ storageKey, ... })` hook, extracting kuvert's
+  `Layout.tsx` resize-drag/collapse-threshold/localStorage-persistence
+  state machine (not its surrounding JSX - logo, nav items, user block,
+  theme toggle, and logout button all stay genuinely app-specific and
+  are not part of this hook).
