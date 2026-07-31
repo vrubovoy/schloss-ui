@@ -2,11 +2,22 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
-Shared design tokens and layout components for the [Schloss
-platform](https://github.com/zudaR107/Hof) — the design-system package
-consumed by [`schloss`](https://github.com/zudaR107/schloss),
-[`schlussel`](https://github.com/zudaR107/schlussel)'s web app, and
-[`kuvert`](https://github.com/zudaR107/kuvert)'s web app.
+Part of the [Hof platform](https://github.com/zudaR107/Hof) — a suite of
+self-hosted personal services:
+
+- [`schloss`](https://github.com/zudaR107/schloss) — home page / launcher
+- [`schlussel`](https://github.com/zudaR107/schlussel) — auth: accounts, login, tokens
+- [`kuvert`](https://github.com/zudaR107/kuvert) — envelope budgeting
+- [`tafel`](https://github.com/zudaR107/tafel) — task/project tracking
+- [`tor`](https://github.com/zudaR107/tor) — reverse-proxy gateway
+- **`schloss-ui`** (this repo) — shared frontend components
+- [`schloss-server-kit`](https://github.com/zudaR107/schloss-server-kit) — shared backend auth/CORS kit
+
+Shared design tokens and layout components consumed by
+[`schloss`](https://github.com/zudaR107/schloss),
+[`schlussel`](https://github.com/zudaR107/schlussel)'s web app,
+[`kuvert`](https://github.com/zudaR107/kuvert)'s web app, and
+[`tafel`](https://github.com/zudaR107/tafel)'s web app.
 
 ## What this is (and isn't)
 
