@@ -107,4 +107,20 @@ describe('EmptyState', () => {
     ).toBeInTheDocument()
     expect(screen.queryByTestId('action-icon')).not.toBeInTheDocument()
   })
+
+  it('renders the illustration instead of the icon circle when given', () => {
+    render(
+      <EmptyState
+        icon={<svg data-testid="empty-icon" />}
+        illustration={<svg data-testid="empty-illustration" />}
+        title="Нет конвертов"
+        description="Создайте первый конверт, чтобы начать планирование бюджета"
+        actionLabel="Создать конверт"
+        onAction={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByTestId('empty-illustration')).toBeInTheDocument()
+    expect(screen.queryByTestId('empty-icon')).not.toBeInTheDocument()
+  })
 })

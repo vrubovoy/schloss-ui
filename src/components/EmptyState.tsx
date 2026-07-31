@@ -1,8 +1,20 @@
 import type { ReactNode } from 'react'
 
 export interface EmptyStateProps {
-  /** A line icon (e.g. a lucide-react component instance) - not an emoji. */
-  icon: ReactNode
+  /**
+   * A line icon (e.g. a lucide-react component instance) - not an emoji.
+   * Wrapped in the standard 52x52 accent-tinted circle. Ignored if
+   * `illustration` is given.
+   */
+  icon?: ReactNode
+  /**
+   * A bigger, custom brand illustration (e.g. a per-service
+   * HeroIllustration mascot) rendered in place of the icon+circle -
+   * multi-shape illustrations turn to mush at the icon circle's 28px
+   * budget, so this flagship empty state gets a proper larger size
+   * instead. Takes precedence over `icon` when both are given.
+   */
+  illustration?: ReactNode
   title: string
   /** One short sentence. */
   description: string
@@ -14,6 +26,7 @@ export interface EmptyStateProps {
 
 export function EmptyState({
   icon,
+  illustration,
   title,
   description,
   actionLabel,
@@ -22,21 +35,27 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <div style={{ textAlign: 'center', padding: '4rem 2rem', maxWidth: 440, margin: '0 auto' }}>
-      <div
-        style={{
-          width: 52,
-          height: 52,
-          borderRadius: 14,
-          background: 'var(--accent-muted)',
-          color: 'var(--accent)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          margin: '0 auto 1rem',
-        }}
-      >
-        {icon}
-      </div>
+      {illustration ? (
+        <div style={{ display: 'flex', justifyContent: 'center', margin: '0 auto 1.25rem' }}>
+          {illustration}
+        </div>
+      ) : (
+        <div
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: 14,
+            background: 'var(--accent-muted)',
+            color: 'var(--accent)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 1rem',
+          }}
+        >
+          {icon}
+        </div>
+      )}
       <h2
         style={{
           margin: '0 0 0.5rem',
