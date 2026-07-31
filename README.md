@@ -69,6 +69,35 @@ level `formatGroupedNumber`/`parseGroupedNumber`/`currencySymbol`
 helpers `NumberField`/`AmountField` are built on, for bespoke inputs that
 need the same formatting without the full `Field` label/box chrome.
 
+## Auth & sidebar helpers
+
+Every frontend app on the platform authenticates against schlussel the
+same way (PKCE login redirect, in-memory access token, silent refresh on
+mount), so that logic lives here as config-driven exports rather than
+being copy-pasted per app:
+
+- `generateCodeVerifier`/`generateCodeChallenge` — PKCE (RFC 7636).
+- `buildLoginUrl(config, currentPath)`/`buildLogoutUrl(config, returnTo?)`/
+  `buildAccountUrl(config, currentPath)` — build full-page-navigation URLs
+  to schlussel's hosted login/logout/account pages, given
+  `config: { schluesselUrl }`. `buildLoginUrl` also stashes a fresh PKCE
+  verifier in `sessionStorage` under `CODE_VERIFIER_STORAGE_KEY`.
+- `createApiClient({ base, authBase?, onUnauthorized })` — an in-memory-
+  token `fetch` wrapper (`get`/`post`/`put`/`delete`) for the app's own
+  `base` API prefix, auto-retrying once on a 401 via `${authBase}/refresh`
+  (default `authBase` is `'/auth'`) before giving up and calling
+  `onUnauthorized()`.
+- `AuthContext`/`useAuth()`/`useAuthProvider({ apiClient, authBase? })` —
+  React auth state: bootstraps via a silent `${authBase}/refresh` +
+  `${authBase}/me` on mount, exposes `{ user, loading, logout, setUser }`.
+- `useSidebarWidth({ storageKey, ... })` — the resize-drag/collapse-
+  threshold/localStorage-persistence state machine behind a resizable app
+  sidebar, returning `{ width, collapsed, dragging, toggleCollapsed,
+  startDrag }`. Deliberately *not* a full `<Sidebar>` component — the
+  surrounding markup (logo, nav items, user block, theme toggle, logout
+  button) differs enough per app that only the state machine, not the
+  JSX, is shared. See kuvert's `Layout.tsx` for the reference wiring.
+
 ## Installing
 
 Not published to any registry — this is an internal package, consumed by
