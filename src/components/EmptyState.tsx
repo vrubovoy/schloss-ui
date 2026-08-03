@@ -36,7 +36,17 @@ export function EmptyState({
   return (
     <div style={{ textAlign: 'center', padding: '4rem 2rem', maxWidth: 440, margin: '0 auto' }}>
       {illustration ? (
-        <div style={{ display: 'flex', justifyContent: 'center', margin: '0 auto 1.25rem' }}>
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.5rem',
+            borderRadius: 'var(--radius-lg)',
+            background: 'var(--accent-muted)',
+            margin: '0 auto 1.25rem',
+          }}
+        >
           {illustration}
         </div>
       ) : (
