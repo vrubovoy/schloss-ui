@@ -17,10 +17,10 @@ self-hosted personal services:
 
 Shared design tokens and layout components consumed by
 [`schloss`](https://github.com/zudaR107/schloss),
-[`schlussel`](https://github.com/zudaR107/schlussel)'s web app,
-[`kuvert`](https://github.com/zudaR107/kuvert)'s web app,
-[`tafel`](https://github.com/zudaR107/tafel)'s web app, and
-[`zettel`](https://github.com/zudaR107/zettel)'s web app.
+[`schlussel`](https://github.com/zudaR107/schlussel)'s frontend app,
+[`kuvert`](https://github.com/zudaR107/kuvert)'s frontend app,
+[`tafel`](https://github.com/zudaR107/tafel)'s frontend app, and
+[`zettel`](https://github.com/zudaR107/zettel)'s frontend app.
 
 ## What this is (and isn't)
 
