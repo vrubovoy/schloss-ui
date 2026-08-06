@@ -60,6 +60,9 @@ export { currencySymbol } from './lib/currency'
 export { THEMES, getStoredTheme, applyTheme, getThemeUpdatedAt, THEME_CHANGE_EVENT } from './lib/theme'
 export type { Theme, ThemeChangeDetail } from './lib/theme'
 
+export { LANGUAGES, getStoredLanguage, setStoredLanguage, createI18n, setLanguage } from './lib/i18n'
+export type { Language, CreateI18nOptions } from './lib/i18n'
+
 export { generateCodeVerifier, generateCodeChallenge } from './auth/pkce'
 export { buildLoginUrl, buildLogoutUrl, buildAccountUrl, CODE_VERIFIER_STORAGE_KEY } from './auth/authRedirect'
 export type { AuthRedirectConfig } from './auth/authRedirect'

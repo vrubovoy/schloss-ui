@@ -113,6 +113,59 @@ being copy-pasted per app:
   button) differs enough per app that only the state machine, not the
   JSX, is shared. See kuvert's `Layout.tsx` for the reference wiring.
 
+## Localization (i18n)
+
+Every frontend app will eventually need to show its UI in more than one
+language, so the language-detection/persistence wiring lives here as one
+shared factory rather than each app hand-rolling its own i18next setup —
+mirrors how `theme.ts` centralizes theme persistence (see "Design
+tokens" above) instead of leaving that to every consumer.
+
+**This is infrastructure only.** No actual translated strings exist
+anywhere on the platform yet — every app is still Russian-only,
+hardcoded exactly as before. This module doesn't localize anything by
+itself; it just gives every app the same plumbing to hang real
+translations on whenever that work happens, app by app.
+
+- `Language`/`LANGUAGES` — the type (`'ru' | 'en'`) and array of every
+  language the platform will eventually support. English is on the
+  roadmap but not written yet; the type/constant exist now so consumers
+  build against the real eventual set instead of a stringly-typed `'ru'`.
+- `getStoredLanguage()`/`setStoredLanguage(language)` — read/write the
+  chosen language under a `schloss-language` localStorage key, the same
+  pattern as `theme.ts`'s `schloss-theme` key. `getStoredLanguage`
+  defaults to `'ru'` when nothing (or something invalid) is stored.
+- `createI18n({ resources })` — builds one i18next + react-i18next
+  instance for the calling app, initialized to `getStoredLanguage()`
+  with `fallbackLng: 'ru'`. Not a shared singleton: each app owns its
+  own translation resources, so each app calls this once and gets back
+  its own instance.
+- `setLanguage(instance, language)` — the one function that actually
+  changes the active language: updates the running instance and
+  persists the choice via `setStoredLanguage`, so a later reload picks
+  it back up.
+
+A consumer wires it up by passing its own flat key → string dict per
+language:
+
+```ts
+import { createI18n } from '@zudar107/schloss-ui'
+
+const i18n = createI18n({
+  resources: {
+    ru: { greeting: 'Привет' },
+    en: {},
+  },
+})
+```
+
+`en: {}` (or omitting `en` entirely) is the expected normal state
+today — every app's real strings live under `ru` only. That's not a
+bug to work around: i18next's own fallback (covered by this module's
+tests) means a missing English string silently renders the Russian
+text instead of breaking anything, so `en` can be filled in key by key,
+later, without any of this factory changing.
+
 ## Installing
 
 Not published to any registry — this is an internal package, consumed by
