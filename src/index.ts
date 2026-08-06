@@ -57,6 +57,8 @@ export type { IconSizeName } from './iconSize'
 export { handleArrowFieldNavigation } from './lib/formNavigation'
 export { formatGroupedNumber, parseGroupedNumber } from './lib/numberFormat'
 export { currencySymbol } from './lib/currency'
+export { formatDate } from './lib/dateFormat'
+export type { DateFormat, DatePrefs } from './lib/dateFormat'
 export { THEMES, getStoredTheme, applyTheme, getThemeUpdatedAt, THEME_CHANGE_EVENT } from './lib/theme'
 export type { Theme, ThemeChangeDetail } from './lib/theme'
 

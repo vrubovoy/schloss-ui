@@ -225,6 +225,15 @@ fit best; add a new section if none fits.
   now `apiOrigin` (was `hubOrigin`), and it renders nothing (was a hidden
   `<iframe>`). Writes use `fetch(..., { keepalive: true })` so a push
   survives the page navigating away immediately afterward.
+- `Modal` now moves initial focus inside the dialog, contains Tab and
+  Shift+Tab navigation, and restores the previously focused element on
+  close without changing its Escape or Enter behavior.
+
+## Shared formatting
+- Added `formatDate` and the `DateFormat`/`DatePrefs` types for consistent
+  profile-aware `dmy`/`mdy`/`ymd` formatting across consumers. Nullable
+  preferences preserve the `ru-RU` default, and timestamps use the profile's
+  IANA timezone when determining the calendar date.
 
 ## Auth & sidebar kit
 - New `src/auth/` module: `generateCodeVerifier`/`generateCodeChallenge`
@@ -243,3 +252,5 @@ fit best; add a new section if none fits.
   state machine (not its surrounding JSX - logo, nav items, user block,
   theme toggle, and logout button all stay genuinely app-specific and
   are not part of this hook).
+- A request that remains unauthorized after a successful token refresh now
+  clears the refreshed in-memory token and calls `onUnauthorized` once.

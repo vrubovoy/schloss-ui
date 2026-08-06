@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { Button, type ButtonVariant } from './Button'
@@ -20,6 +20,9 @@ export interface ModalProps {
   /** Rendered right-aligned; put the primary action last so it's rightmost. */
   actions?: ModalAction[]
 }
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 function CloseButton({ onClick }: { onClick: () => void }) {
   const hover = useHover()
@@ -50,11 +53,42 @@ function CloseButton({ onClick }: { onClick: () => void }) {
 }
 
 export function Modal({ open, onClose, title, icon, children, actions }: ModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const dialog = dialogRef.current
+    const initialFocus = dialog?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? dialog
+    initialFocus?.focus()
+
+    return () => previousFocus?.focus()
+  }, [open])
+
   useEffect(() => {
     if (!open) return
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         onClose()
+        return
+      }
+      if (event.key === 'Tab') {
+        const dialog = dialogRef.current
+        if (!dialog) return
+        const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        const active = document.activeElement
+        if (!first || !last) {
+          event.preventDefault()
+          dialog.focus()
+        } else if (event.shiftKey && (active === first || !dialog.contains(active))) {
+          event.preventDefault()
+          last.focus()
+        } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+          event.preventDefault()
+          first.focus()
+        }
         return
       }
       // The Save/Cancel buttons live outside the <form> (children render
@@ -94,9 +128,11 @@ export function Modal({ open, onClose, title, icon, children, actions }: ModalPr
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         style={{
           width: '100%',
           maxWidth: 420,

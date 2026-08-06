@@ -32,6 +32,67 @@ describe('Modal', () => {
     expect(screen.getByText('Содержимое модалки')).toBeInTheDocument()
   })
 
+  it('moves initial focus inside the dialog when opened', () => {
+    render(
+      <Modal open onClose={vi.fn()} title="Заголовок">
+        <input aria-label="Имя" />
+      </Modal>,
+    )
+
+    expect(screen.getByRole('dialog')).toContainElement(document.activeElement as HTMLElement)
+  })
+
+  it('contains Tab and Shift+Tab focus within the dialog', async () => {
+    const user = userEvent.setup()
+    render(
+      <Modal
+        open
+        onClose={vi.fn()}
+        title="Заголовок"
+        actions={[{ label: 'Сохранить', onClick: vi.fn(), variant: 'primary' }]}
+      >
+        <input aria-label="Имя" />
+      </Modal>,
+    )
+
+    const closeButton = screen.getByRole('button', { name: 'Закрыть' })
+    const saveButton = screen.getByRole('button', { name: 'Сохранить' })
+    saveButton.focus()
+
+    await user.tab()
+    expect(closeButton).toHaveFocus()
+
+    await user.tab({ shift: true })
+    expect(saveButton).toHaveFocus()
+  })
+
+  it('restores focus to the previously focused element when closed', () => {
+    const closed = (
+      <>
+        <button type="button">Открыть</button>
+        <Modal open={false} onClose={vi.fn()} title="Заголовок">
+          Содержимое модалки
+        </Modal>
+      </>
+    )
+    const { rerender } = render(closed)
+    const opener = screen.getByRole('button', { name: 'Открыть' })
+    opener.focus()
+
+    rerender(
+      <>
+        <button type="button">Открыть</button>
+        <Modal open onClose={vi.fn()} title="Заголовок">
+          Содержимое модалки
+        </Modal>
+      </>,
+    )
+    screen.getByRole('button', { name: 'Закрыть' }).focus()
+
+    rerender(closed)
+    expect(opener).toHaveFocus()
+  })
+
   it('renders a close control with accessible name "Закрыть" and calls onClose exactly once when clicked', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()
@@ -247,10 +308,13 @@ describe('Modal', () => {
         <form>
           <input aria-label="Имя" />
         </form>
+        <div tabIndex={-1}>Статический текст</div>
       </Modal>,
     )
 
-    expect(document.body).toHaveFocus()
+    const staticText = screen.getByText('Статический текст')
+    staticText.focus()
+    expect(staticText).toHaveFocus()
     await user.keyboard('{Enter}')
 
     expect(onSave).not.toHaveBeenCalled()

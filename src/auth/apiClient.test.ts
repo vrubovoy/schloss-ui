@@ -229,6 +229,22 @@ describe('401 handling - refresh + retry', () => {
     await expect(client.get('/foo')).rejects.toMatchObject({ status: 500 })
   })
 
+  it('when the request is still 401 after refresh, clears the token and calls onUnauthorized once', async () => {
+    const onUnauthorized = vi.fn()
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(401, {}))
+      .mockResolvedValueOnce(jsonResponse(200, { accessToken: 'refreshed-token' }))
+      .mockResolvedValueOnce(jsonResponse(401, { message: 'still unauthorized' }))
+    const client = createApiClient({ base: '/api', onUnauthorized })
+    client.setAccessToken('stale-token')
+
+    await expect(client.get('/foo')).rejects.toMatchObject({ status: 401 })
+
+    expect(client.getAccessToken()).toBeNull()
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it('when refresh itself is not ok, calls onUnauthorized, clears the token, and rejects with ApiError status 401', async () => {
     const onUnauthorized = vi.fn()
     fetchMock
