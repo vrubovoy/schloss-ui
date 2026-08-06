@@ -72,6 +72,10 @@ export function createApiClient(config: CreateApiClientConfig): ApiClient {
       if (refreshed) {
         headers['Authorization'] = `Bearer ${accessToken}`
         const retry = await fetch(`${base}${path}`, { ...init, headers, credentials: 'include' })
+        if (retry.status === 401) {
+          setAccessToken(null)
+          onUnauthorized()
+        }
         if (!retry.ok) throw new ApiError(retry.status, await retry.text())
         if (retry.status === 204) return undefined as T
         return retry.json() as Promise<T>

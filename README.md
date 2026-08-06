@@ -83,6 +83,13 @@ fields instead of the browser's native per-element behavior) and the low-
 level `formatGroupedNumber`/`parseGroupedNumber`/`currencySymbol`
 helpers `NumberField`/`AmountField` are built on, for bespoke inputs that
 need the same formatting without the full `Field` label/box chrome.
+`formatDate(iso, prefs)` and its `DateFormat`/`DatePrefs` types apply a
+profile's `dmy`/`mdy`/`ymd` and IANA-timezone preferences; null preferences
+retain the existing browser-local `ru-RU` date format.
+
+`Modal` moves focus inside when opened, keeps Tab navigation within the
+dialog, and restores focus when closed, while retaining its Escape-to-close
+and Enter-to-primary-action behavior.
 
 ## Auth & sidebar helpers
 
@@ -101,7 +108,8 @@ being copy-pasted per app:
   token `fetch` wrapper (`get`/`post`/`put`/`delete`) for the app's own
   `base` API prefix, auto-retrying once on a 401 via `${authBase}/refresh`
   (default `authBase` is `'/auth'`) before giving up and calling
-  `onUnauthorized()`.
+  `onUnauthorized()`; a retry that also returns 401 clears the refreshed
+  in-memory token before invoking the callback.
 - `AuthContext`/`useAuth()`/`useAuthProvider({ apiClient, authBase? })` —
   React auth state: bootstraps via a silent `${authBase}/refresh` +
   `${authBase}/me` on mount, exposes `{ user, loading, logout, setUser }`.
