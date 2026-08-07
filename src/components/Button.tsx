@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, CSSProperties, MouseEventHandler } from 'react'
+import { useState, type ButtonHTMLAttributes, type CSSProperties, type FocusEventHandler, type MouseEventHandler } from 'react'
 import { useHover } from '../hooks/useHover'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
@@ -15,7 +15,7 @@ const VARIANT_STYLES: Record<ButtonVariant, CSSProperties> = {
   },
   secondary: {
     background: 'var(--accent-muted)',
-    color: 'var(--accent)',
+    color: 'var(--accent-text)',
     border: 'none',
   },
   ghost: {
@@ -44,14 +44,24 @@ function chain(a?: MouseEventHandler<HTMLButtonElement>, b?: MouseEventHandler<H
   }
 }
 
-export function Button({ variant = 'primary', style, onMouseEnter, onMouseLeave, ...rest }: ButtonProps) {
+function chainFocus(a: FocusEventHandler<HTMLButtonElement> | undefined, b: FocusEventHandler<HTMLButtonElement>): FocusEventHandler<HTMLButtonElement> {
+  return (event) => {
+    a?.(event)
+    b(event)
+  }
+}
+
+export function Button({ variant = 'primary', style, onMouseEnter, onMouseLeave, onFocus, onBlur, ...rest }: ButtonProps) {
   const hover = useHover()
+  const [focusVisible, setFocusVisible] = useState(false)
   return (
     <button
       type="button"
       {...rest}
       onMouseEnter={chain(onMouseEnter, hover.onMouseEnter)}
       onMouseLeave={chain(onMouseLeave, hover.onMouseLeave)}
+      onFocus={chainFocus(onFocus, (event) => setFocusVisible(event.currentTarget.matches(':focus-visible')))}
+      onBlur={chainFocus(onBlur, () => setFocusVisible(false))}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -69,6 +79,7 @@ export function Button({ variant = 'primary', style, onMouseEnter, onMouseLeave,
         ...VARIANT_STYLES[variant],
         ...(hover.hovered ? VARIANT_HOVER_STYLES[variant] : null),
         ...style,
+        ...(focusVisible ? { outline: '2px solid var(--text-primary)', outlineOffset: 2 } : null),
       }}
     />
   )

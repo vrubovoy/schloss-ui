@@ -7,6 +7,9 @@ export type { FooterProps } from './components/Footer'
 export { EmptyState } from './components/EmptyState'
 export type { EmptyStateProps } from './components/EmptyState'
 
+export { DirectExportAction } from './components/DirectExportAction'
+export type { DirectExportActionProps } from './components/DirectExportAction'
+
 export { Button } from './components/Button'
 export type { ButtonProps, ButtonVariant } from './components/Button'
 
@@ -59,6 +62,7 @@ export { formatGroupedNumber, parseGroupedNumber } from './lib/numberFormat'
 export { currencySymbol } from './lib/currency'
 export { formatDate } from './lib/dateFormat'
 export type { DateFormat, DatePrefs } from './lib/dateFormat'
+export { downloadJson } from './lib/downloadJson'
 export { THEMES, getStoredTheme, applyTheme, getThemeUpdatedAt, THEME_CHANGE_EVENT } from './lib/theme'
 export type { Theme, ThemeChangeDetail } from './lib/theme'
 

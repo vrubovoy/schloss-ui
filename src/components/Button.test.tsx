@@ -81,6 +81,34 @@ describe('Button', () => {
     const button = screen.getByTestId('my-button')
     expect(button).toHaveClass('my-custom-class')
   })
+
+  it('uses the contrast text token for the secondary variant', () => {
+    render(<Button variant="secondary">Secondary</Button>)
+
+    expect(screen.getByRole('button', { name: 'Secondary' })).toHaveStyle({
+      color: 'var(--accent-text)',
+    })
+  })
+
+  it('shows a focus ring for keyboard focus and preserves focus handlers', async () => {
+    const user = userEvent.setup()
+    const onFocus = vi.fn()
+    const onBlur = vi.fn()
+    render(<Button onFocus={onFocus} onBlur={onBlur}>Focusable</Button>)
+    const button = screen.getByRole('button', { name: 'Focusable' })
+
+    await user.tab()
+    expect(button).toHaveFocus()
+    expect(button).toHaveStyle({
+      outline: '2px solid var(--text-primary)',
+      outlineOffset: '2px',
+    })
+    expect(onFocus).toHaveBeenCalledTimes(1)
+
+    await user.tab()
+    expect(button.style.outline).toBe('none')
+    expect(onBlur).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('Button hover feedback', () => {
