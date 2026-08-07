@@ -7,7 +7,15 @@ export interface DatePrefs {
 
 export function formatDate(iso: string, prefs?: DatePrefs | null): string {
   const date = new Date(iso)
-  const timeZone = prefs?.timezone ?? undefined
+  let timeZone = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? 'UTC' : prefs?.timezone ?? undefined
+
+  if (timeZone) {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone })
+    } catch {
+      timeZone = undefined
+    }
+  }
 
   if (!prefs?.dateFormat) {
     return date.toLocaleDateString('ru-RU', timeZone ? { timeZone } : undefined)

@@ -78,6 +78,34 @@ describe('Field (input mode)', () => {
     expect(screen.getByText('Обязательное поле')).toBeInTheDocument()
   })
 
+  it('links the input to its error text with aria-describedby', () => {
+    render(<Field label="Сумма" error="Обязательное поле" value="" onChange={() => {}} />)
+
+    const input = screen.getByLabelText('Сумма')
+    const error = screen.getByText('Обязательное поле')
+    expect(error).toHaveAttribute('id')
+    expect(input).toHaveAttribute('aria-describedby', error.id)
+  })
+
+  it('preserves a caller-provided input descriptor when linking error text', () => {
+    render(
+      <>
+        <p id="amount-help">Введите сумму</p>
+        <Field
+          label="Сумма"
+          error="Обязательное поле"
+          aria-describedby="amount-help"
+          value=""
+          onChange={() => {}}
+        />
+      </>,
+    )
+
+    const input = screen.getByLabelText('Сумма')
+    const error = screen.getByText('Обязательное поле')
+    expect(input.getAttribute('aria-describedby')?.split(' ')).toEqual(['amount-help', error.id])
+  })
+
   it('does not render any error text when error is not provided', () => {
     render(<Field label="Сумма" value="" onChange={() => {}} />)
     expect(screen.queryByText('Обязательное поле')).not.toBeInTheDocument()
@@ -288,6 +316,47 @@ describe('Field (select mode)', () => {
     )
 
     expect(screen.getByText('Выберите категорию')).toBeInTheDocument()
+  })
+
+  it('links the select to its error text with aria-describedby', () => {
+    render(
+      <Field
+        as="select"
+        label="Категория"
+        error="Выберите категорию"
+        value="a"
+        onChange={() => {}}
+      >
+        <option value="a">A</option>
+      </Field>,
+    )
+
+    const select = screen.getByRole('combobox', { name: 'Категория' })
+    const error = screen.getByText('Выберите категорию')
+    expect(error).toHaveAttribute('id')
+    expect(select).toHaveAttribute('aria-describedby', error.id)
+  })
+
+  it('preserves a caller-provided select descriptor when linking error text', () => {
+    render(
+      <>
+        <p id="category-help">Выберите тип расхода</p>
+        <Field
+          as="select"
+          label="Категория"
+          error="Выберите категорию"
+          aria-describedby="category-help"
+          value="a"
+          onChange={() => {}}
+        >
+          <option value="a">A</option>
+        </Field>
+      </>,
+    )
+
+    const select = screen.getByRole('combobox', { name: 'Категория' })
+    const error = screen.getByText('Выберите категорию')
+    expect(select.getAttribute('aria-describedby')?.split(' ')).toEqual(['category-help', error.id])
   })
 
   it('renders the prefix content in select mode', () => {

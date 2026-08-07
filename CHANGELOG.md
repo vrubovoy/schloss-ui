@@ -228,12 +228,20 @@ fit best; add a new section if none fits.
 - `Modal` now moves initial focus inside the dialog, contains Tab and
   Shift+Tab navigation, and restores the previously focused element on
   close without changing its Escape or Enter behavior.
+- `Field` error text now has a stable generated ID linked from the input or
+  select through `aria-describedby`, preserving descriptor IDs supplied by
+  callers.
+- `Modal` focus trapping now excludes hidden and disabled candidates and
+  recognizes contenteditable and `summary` elements as tabbable.
 
 ## Shared formatting
 - Added `formatDate` and the `DateFormat`/`DatePrefs` types for consistent
   profile-aware `dmy`/`mdy`/`ymd` formatting across consumers. Nullable
   preferences preserve the `ru-RU` default, and timestamps use the profile's
   IANA timezone when determining the calendar date.
+- Preserve exact `YYYY-MM-DD` inputs as calendar dates independently of the
+  selected timezone, and fall back to local formatting when a malformed
+  timezone reaches the formatter.
 
 ## Auth & sidebar kit
 - New `src/auth/` module: `generateCodeVerifier`/`generateCodeChallenge`

@@ -120,18 +120,32 @@ function FieldSuffix({ children }: { children: ReactNode }) {
   )
 }
 
-function FieldError({ children }: { children: ReactNode }) {
+function FieldError({ id, children }: { id: string; children: ReactNode }) {
   return (
-    <p style={{ margin: '0.375rem 0 0', fontSize: '0.75rem', color: 'var(--danger)' }}>
+    <p id={id} style={{ margin: '0.375rem 0 0', fontSize: '0.75rem', color: 'var(--danger)' }}>
       {children}
     </p>
   )
 }
 
-function InputField({ label, error, invalid, prefix, suffix, id, style, onFocus, onBlur, ...rest }: FieldInputProps) {
+function InputField({
+  label,
+  error,
+  invalid,
+  prefix,
+  suffix,
+  id,
+  style,
+  onFocus,
+  onBlur,
+  'aria-describedby': describedBy,
+  ...rest
+}: FieldInputProps) {
   const [focused, setFocused] = useState(false)
   const generatedId = useId()
   const fieldId = id ?? generatedId
+  const errorId = `${fieldId}-error`
+  const ariaDescribedBy = [describedBy, error ? errorId : null].filter(Boolean).join(' ') || undefined
 
   return (
     <div>
@@ -141,6 +155,7 @@ function InputField({ label, error, invalid, prefix, suffix, id, style, onFocus,
         <input
           {...rest}
           id={fieldId}
+          aria-describedby={ariaDescribedBy}
           aria-invalid={!!error || !!invalid}
           onFocus={(event) => {
             setFocused(true)
@@ -160,15 +175,29 @@ function InputField({ label, error, invalid, prefix, suffix, id, style, onFocus,
         />
         {suffix && <FieldSuffix>{suffix}</FieldSuffix>}
       </div>
-      {error && <FieldError>{error}</FieldError>}
+      {error && <FieldError id={errorId}>{error}</FieldError>}
     </div>
   )
 }
 
-function SelectField({ label, error, invalid, prefix, suffix, id, style, onFocus, onBlur, ...rest }: FieldSelectProps) {
+function SelectField({
+  label,
+  error,
+  invalid,
+  prefix,
+  suffix,
+  id,
+  style,
+  onFocus,
+  onBlur,
+  'aria-describedby': describedBy,
+  ...rest
+}: FieldSelectProps) {
   const [focused, setFocused] = useState(false)
   const generatedId = useId()
   const fieldId = id ?? generatedId
+  const errorId = `${fieldId}-error`
+  const ariaDescribedBy = [describedBy, error ? errorId : null].filter(Boolean).join(' ') || undefined
 
   return (
     <div>
@@ -178,6 +207,7 @@ function SelectField({ label, error, invalid, prefix, suffix, id, style, onFocus
         <select
           {...rest}
           id={fieldId}
+          aria-describedby={ariaDescribedBy}
           aria-invalid={!!error || !!invalid}
           onFocus={(event) => {
             setFocused(true)
@@ -214,7 +244,7 @@ function SelectField({ label, error, invalid, prefix, suffix, id, style, onFocus
           />
         )}
       </div>
-      {error && <FieldError>{error}</FieldError>}
+      {error && <FieldError id={errorId}>{error}</FieldError>}
     </div>
   )
 }

@@ -85,11 +85,19 @@ helpers `NumberField`/`AmountField` are built on, for bespoke inputs that
 need the same formatting without the full `Field` label/box chrome.
 `formatDate(iso, prefs)` and its `DateFormat`/`DatePrefs` types apply a
 profile's `dmy`/`mdy`/`ymd` and IANA-timezone preferences; null preferences
-retain the existing browser-local `ru-RU` date format.
+retain the existing browser-local `ru-RU` date format. Exact `YYYY-MM-DD`
+values remain the same calendar date in every timezone, while a malformed
+profile timezone gracefully falls back to browser-local formatting.
 
 `Modal` moves focus inside when opened, keeps Tab navigation within the
 dialog, and restores focus when closed, while retaining its Escape-to-close
-and Enter-to-primary-action behavior.
+and Enter-to-primary-action behavior. Its focus trap ignores hidden and
+disabled controls and includes native tabbable `summary` and contenteditable
+elements.
+
+`Field` links inline error text to its input or select with
+`aria-describedby`; when callers supply their own descriptor IDs, the error ID
+is appended rather than replacing them.
 
 ## Auth & sidebar helpers
 
