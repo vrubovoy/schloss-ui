@@ -31,7 +31,9 @@ function isTabbable(element: HTMLElement) {
     ? Number(explicitTabIndex) < 0
     : element.tabIndex < 0 && !implicitContentEditable
   if (hasNegativeTabIndex || element.closest('[hidden], [inert]')) return false
-  if ('disabled' in element && element.disabled) return false
+  // `:disabled` includes form controls disabled through an ancestor
+  // fieldset, while preserving the native first-legend exception.
+  if (element.matches(':disabled')) return false
 
   let current: HTMLElement | null = element
   while (current) {

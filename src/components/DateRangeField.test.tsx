@@ -48,6 +48,56 @@ describe('DateRangeField', () => {
     expect(screen.getByLabelText('Период')).toBeInTheDocument()
   })
 
+  it('formats both dates using the optional profile dateFormat', () => {
+    render(
+      <DateRangeField
+        label="Период"
+        start="2026-07-10"
+        end="2026-07-20"
+        onChange={vi.fn()}
+        dateFormat="mdy"
+      />,
+    )
+
+    expect(screen.getByLabelText('Период')).toHaveValue('07/10/2026 – 07/20/2026')
+  })
+
+  it('keeps the default DMY display when dateFormat is omitted', () => {
+    render(
+      <DateRangeField
+        label="Период"
+        start="2026-07-10"
+        end="2026-07-20"
+        onChange={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('Период')).toHaveValue('10.07.2026 – 20.07.2026')
+  })
+
+  it('forwards weekStartsOn=0 to the calendar header and day grid', async () => {
+    const user = userEvent.setup()
+    render(
+      <DateRangeField
+        label="Период"
+        start="2026-07-10"
+        end="2026-07-20"
+        onChange={vi.fn()}
+        weekStartsOn={0}
+      />,
+    )
+
+    await user.click(screen.getByLabelText('Период'))
+
+    const july5 = screen.getByRole('button', { name: '2026-07-05' })
+    const dayGrid = july5.parentElement
+    const weekdayGrid = dayGrid?.previousElementSibling
+    expect(Array.from(dayGrid!.children).indexOf(july5)).toBe(7)
+    expect(Array.from(weekdayGrid?.children ?? []).map((cell) => cell.textContent)).toEqual(
+      ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'],
+    )
+  })
+
   it('first click: sets start, leaves end unset, and keeps the popover open', async () => {
     const user = userEvent.setup()
     const onChangeSpy = vi.fn()

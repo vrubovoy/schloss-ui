@@ -19,6 +19,23 @@ describe('DateField', () => {
     expect(screen.getByLabelText('Дата')).toHaveValue('15.07.2026')
   })
 
+  it.each([
+    ['dmy', '15.07.2026'],
+    ['mdy', '07/15/2026'],
+    ['ymd', '2026-07-15'],
+  ] as const)('formats the display using profile dateFormat=%s', (dateFormat, expected) => {
+    render(
+      <DateField
+        label="Дата"
+        value="2026-07-15"
+        onChange={vi.fn()}
+        dateFormat={dateFormat}
+      />,
+    )
+
+    expect(screen.getByLabelText('Дата')).toHaveValue(expected)
+  })
+
   it('shows an empty/placeholder display when value is ""', () => {
     render(<DateField label="Дата" value="" onChange={vi.fn()} />)
     expect(screen.getByLabelText('Дата')).toHaveValue('')
@@ -66,6 +83,40 @@ describe('DateField', () => {
     expect(
       screen.queryByRole('button', { name: '2026-07-10' }),
     ).not.toBeInTheDocument()
+  })
+
+  it.each([
+    [0, ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'], 7],
+    [1, ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'], 6],
+  ] as const)('uses weekStartsOn=%s for the headers and actual calendar grid', async (weekStartsOn, labels, expectedJuly5Index) => {
+    const user = userEvent.setup()
+    render(
+      <DateField
+        label="Дата"
+        value="2026-07-15"
+        onChange={vi.fn()}
+        weekStartsOn={weekStartsOn}
+      />,
+    )
+
+    await user.click(screen.getByLabelText('Дата'))
+
+    const july5 = screen.getByRole('button', { name: '2026-07-05' })
+    const dayGrid = july5.parentElement
+    const weekdayGrid = dayGrid?.previousElementSibling
+    expect(dayGrid).not.toBeNull()
+    expect(Array.from(dayGrid!.children).indexOf(july5)).toBe(expectedJuly5Index)
+    expect(Array.from(weekdayGrid?.children ?? []).map((cell) => cell.textContent)).toEqual(labels)
+  })
+
+  it('keeps the calendar Monday-first when weekStartsOn is omitted', async () => {
+    const user = userEvent.setup()
+    render(<DateField label="Дата" value="2026-07-15" onChange={vi.fn()} />)
+
+    await user.click(screen.getByLabelText('Дата'))
+
+    const july5 = screen.getByRole('button', { name: '2026-07-05' })
+    expect(Array.from(july5.parentElement!.children).indexOf(july5)).toBe(6)
   })
 
   it('when the trigger is near the bottom of a short viewport, pulls the popover up just enough to stay on-screen, not far away from the trigger', async () => {

@@ -88,6 +88,27 @@ describe('Modal', () => {
     expect(closeButton).toHaveFocus()
   })
 
+  it('ignores controls inside a disabled fieldset when trapping focus', async () => {
+    const user = userEvent.setup()
+    render(
+      <>
+        <button type="button">Вне модалки</button>
+        <Modal open onClose={vi.fn()} title="Заголовок">
+          <input aria-label="Последнее поле" />
+          <fieldset disabled>
+            <button type="button" tabIndex={0}>Недоступная вложенная кнопка</button>
+          </fieldset>
+        </Modal>
+      </>,
+    )
+
+    const closeButton = screen.getByRole('button', { name: 'Закрыть' })
+    screen.getByLabelText('Последнее поле').focus()
+
+    await user.tab()
+    expect(closeButton).toHaveFocus()
+  })
+
   it.each([
     [
       'contenteditable element',

@@ -182,6 +182,50 @@ describe('ThemeSync (pushing a newer local theme)', () => {
     expect(init.keepalive).toBe(true)
     expect(JSON.parse(init.body as string)).toEqual({ theme: 'dark', updatedAt: 50 })
   })
+
+  it('adopts a newer winning server value returned by PUT', async () => {
+    localStorage.setItem(STORAGE_KEY, 'light')
+    localStorage.setItem(UPDATED_AT_KEY, '100')
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(true, { theme: null, updatedAt: 0 }))
+      .mockResolvedValueOnce(jsonResponse(true, { theme: 'sepia', updatedAt: 200 }))
+
+    render(<ThemeSync apiOrigin={API_ORIGIN} />)
+
+    await waitFor(() => {
+      expect(document.documentElement).toHaveAttribute('data-theme', 'sepia')
+    })
+    expect(getStoredTheme()).toBe('sepia')
+    expect(getThemeUpdatedAt()).toBe(200)
+  })
+
+  it('does not let a delayed PUT response replace newer local state', async () => {
+    localStorage.setItem(STORAGE_KEY, 'light')
+    localStorage.setItem(UPDATED_AT_KEY, '100')
+    let resolvePut!: (value: Response) => void
+    const pendingPut = new Promise<Response>((resolve) => {
+      resolvePut = resolve
+    })
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(true, { theme: null, updatedAt: 0 }))
+      .mockImplementationOnce(() => pendingPut)
+      .mockResolvedValueOnce(jsonResponse(true, { theme: 'dark', updatedAt: 300 }))
+
+    render(<ThemeSync apiOrigin={API_ORIGIN} />)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+
+    act(() => {
+      applyTheme('dark', 300)
+    })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
+
+    resolvePut(jsonResponse(true, { theme: 'sepia', updatedAt: 200 }))
+    await flush()
+
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+    expect(getStoredTheme()).toBe('dark')
+    expect(getThemeUpdatedAt()).toBe(300)
+  })
 })
 
 describe('ThemeSync (no-op on equal timestamps)', () => {
