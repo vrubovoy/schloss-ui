@@ -22,6 +22,22 @@ describe('formatDate', () => {
     expect(formatDate(timestamp, { dateFormat: 'ymd', timezone: 'Europe/Moscow' })).toBe('2026-08-06')
   })
 
+  it.each(['America/Los_Angeles', 'Asia/Tokyo'])(
+    'preserves a date-only YYYY-MM-DD value in the %s timezone',
+    (timezone) => {
+      expect(formatDate('2026-08-05', { dateFormat: 'ymd', timezone })).toBe('2026-08-05')
+    },
+  )
+
+  it('falls back to local date formatting when the profile timezone is malformed', () => {
+    const timestamp = '2026-08-05T12:00:00.000Z'
+    const localResult = formatDate(timestamp, { dateFormat: 'ymd', timezone: null })
+
+    expect(formatDate(timestamp, { dateFormat: 'ymd', timezone: 'Mars/Olympus_Mons' })).toBe(
+      localResult,
+    )
+  })
+
   it('keeps the ru-RU default when profile preferences are null', () => {
     const timestamp = '2026-08-05T12:00:00.000Z'
 

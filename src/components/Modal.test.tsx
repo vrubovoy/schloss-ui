@@ -66,6 +66,62 @@ describe('Modal', () => {
     expect(saveButton).toHaveFocus()
   })
 
+  it.each([
+    ['hidden', <button key="hidden" type="button" hidden>Скрытая кнопка</button>],
+    ['disabled', <button key="disabled" type="button" disabled tabIndex={0}>Недоступная кнопка</button>],
+  ])('ignores a %s control when finding the last tabbable element', async (_kind, excludedControl) => {
+    const user = userEvent.setup()
+    render(
+      <>
+        <button type="button">Вне модалки</button>
+        <Modal open onClose={vi.fn()} title="Заголовок">
+          <input aria-label="Последнее поле" />
+          {excludedControl}
+        </Modal>
+      </>,
+    )
+
+    const closeButton = screen.getByRole('button', { name: 'Закрыть' })
+    screen.getByLabelText('Последнее поле').focus()
+
+    await user.tab()
+    expect(closeButton).toHaveFocus()
+  })
+
+  it.each([
+    [
+      'contenteditable element',
+      <div key="editor" contentEditable suppressContentEditableWarning>
+        Редактор
+      </div>,
+      'Редактор',
+    ],
+    [
+      'summary element',
+      <details key="details" open>
+        <summary>Подробности</summary>
+        Текст
+      </details>,
+      'Подробности',
+    ],
+  ])('includes a %s in the modal focus trap', async (_kind, tabbable, label) => {
+    const user = userEvent.setup()
+    render(
+      <>
+        <button type="button">Вне модалки</button>
+        <Modal open onClose={vi.fn()} title="Заголовок">
+          {tabbable}
+        </Modal>
+      </>,
+    )
+
+    const closeButton = screen.getByRole('button', { name: 'Закрыть' })
+    screen.getByText(label).focus()
+
+    await user.tab()
+    expect(closeButton).toHaveFocus()
+  })
+
   it('restores focus to the previously focused element when closed', () => {
     const closed = (
       <>

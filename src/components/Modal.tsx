@@ -21,8 +21,30 @@ export interface ModalProps {
   actions?: ModalAction[]
 }
 
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+const TABBABLE_SELECTOR =
+  'a[href], button, input, select, textarea, summary, [contenteditable]:not([contenteditable="false"]), [tabindex]'
+
+function isTabbable(element: HTMLElement) {
+  const explicitTabIndex = element.getAttribute('tabindex')
+  const implicitContentEditable = element.matches('[contenteditable]:not([contenteditable="false"])')
+  const hasNegativeTabIndex = explicitTabIndex !== null
+    ? Number(explicitTabIndex) < 0
+    : element.tabIndex < 0 && !implicitContentEditable
+  if (hasNegativeTabIndex || element.closest('[hidden], [inert]')) return false
+  if ('disabled' in element && element.disabled) return false
+
+  let current: HTMLElement | null = element
+  while (current) {
+    const style = getComputedStyle(current)
+    if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false
+    current = current.parentElement
+  }
+  return true
+}
+
+function getTabbableElements(dialog: HTMLElement) {
+  return Array.from(dialog.querySelectorAll<HTMLElement>(TABBABLE_SELECTOR)).filter(isTabbable)
+}
 
 function CloseButton({ onClick }: { onClick: () => void }) {
   const hover = useHover()
@@ -59,7 +81,7 @@ export function Modal({ open, onClose, title, icon, children, actions }: ModalPr
     if (!open) return
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const dialog = dialogRef.current
-    const initialFocus = dialog?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ?? dialog
+    const initialFocus = dialog ? getTabbableElements(dialog)[0] ?? dialog : null
     initialFocus?.focus()
 
     return () => previousFocus?.focus()
@@ -75,9 +97,9 @@ export function Modal({ open, onClose, title, icon, children, actions }: ModalPr
       if (event.key === 'Tab') {
         const dialog = dialogRef.current
         if (!dialog) return
-        const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-        const first = focusable[0]
-        const last = focusable[focusable.length - 1]
+        const tabbable = getTabbableElements(dialog)
+        const first = tabbable[0]
+        const last = tabbable[tabbable.length - 1]
         const active = document.activeElement
         if (!first || !last) {
           event.preventDefault()
