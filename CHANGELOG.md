@@ -98,6 +98,12 @@ fit best; add a new section if none fits.
   status-icon circle (`success`/`error`), bottom-right, `role="status"`
   so screen readers announce it. First real usage lands with whichever
   consuming-repo issue wires up Modal-driven forms.
+- `DirectExportAction`: shared direct-JSON-export settings card with a native
+  secondary action button, controlled loading state that blocks duplicate
+  activation, and an assertive error region. The accompanying `downloadJson`
+  helper writes readable UTF-8 `application/json` under the caller's exact safe,
+  deterministic filename and always revokes its object URL; request routing,
+  authentication, and filename policy stay in each consuming service.
 - `Footer` gained optional `helpHref`/`helpLabel` props, rendered as a
   small link when `helpHref` is set (fully backward compatible
   otherwise) - lets every consuming app link to its own in-app usage

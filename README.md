@@ -47,9 +47,9 @@ ongoing/proposed work.
 
 ## Components
 
-`Header`, `Footer`, `EmptyState`, `Button`, `Badge`, `SegmentedControl`,
-`Field`, `NumberField`, `AmountField`, `DateField`, `DateRangeField`,
-`Modal`, `StatTile`, `Amount`, `Sparkline`, `Toast`, `ThemeToggle` — all
+`Header`, `Footer`, `EmptyState`, `DirectExportAction`, `Button`, `Badge`,
+`SegmentedControl`, `Field`, `NumberField`, `AmountField`, `DateField`,
+`DateRangeField`, `Modal`, `StatTile`, `Amount`, `Sparkline`, `Toast`, `ThemeToggle` — all
 exported from the package root (`import { Button } from
 '@zudar107/schloss-ui'`), styled entirely from the shared tokens plus
 each consumer's own `--accent`.
@@ -105,6 +105,16 @@ includes native tabbable `summary` and contenteditable elements.
 `Field` links inline error text to its input or select with
 `aria-describedby`; when callers supply their own descriptor IDs, the error ID
 is appended rather than replacing them.
+
+`DirectExportAction` is the shared settings-page presentation for downloading
+one service's authenticated JSON snapshot. Callers provide its labels,
+controlled `loading`/`error` state, and `onExport`; while loading, the native
+button is disabled and repeated activation is ignored, and errors are announced
+assertively. `downloadJson(data, filename)` serializes readable UTF-8 JSON into
+an `application/json` Blob, downloads it under the exact safe, deterministic
+filename supplied by the caller, and always revokes its object URL. Endpoint
+selection, authorization, fetching, and filename construction remain the
+calling service's responsibility.
 
 ## Auth & sidebar helpers
 
