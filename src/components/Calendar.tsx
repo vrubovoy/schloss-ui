@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useHover } from '../hooks/useHover'
-import { addMonths, getMonthGrid, monthLabel, WEEKDAY_LABELS } from '../lib/dateUtils'
+import {
+  addMonths, getMonthGrid, getWeekdayLabels, monthLabel, type WeekStartsOn,
+} from '../lib/dateUtils'
 
 // Internal - not exported from the package. Shared month-grid primitive
 // used by both DateField (single-select) and DateRangeField (two-click
@@ -13,6 +15,7 @@ export interface CalendarProps {
   /** Live preview of the second endpoint while hovering, before it's
    * clicked. Ignored once `end` is actually set. */
   hoverEnd: string | null
+  weekStartsOn?: WeekStartsOn | null
   onDayClick: (iso: string) => void
   onDayHover: (iso: string | null) => void
 }
@@ -74,9 +77,13 @@ function DayCell({
   )
 }
 
-export function Calendar({ initialMonth, start, end, hoverEnd, onDayClick, onDayHover }: CalendarProps) {
+export function Calendar({
+  initialMonth, start, end, hoverEnd, weekStartsOn, onDayClick, onDayHover,
+}: CalendarProps) {
   const [month, setMonth] = useState(initialMonth)
-  const cells = getMonthGrid(month)
+  const normalizedWeekStartsOn = weekStartsOn ?? 1
+  const cells = getMonthGrid(month, normalizedWeekStartsOn)
+  const weekdayLabels = getWeekdayLabels(normalizedWeekStartsOn)
 
   // The hovered candidate renders exactly like a committed `end` (full
   // accent fill, not just the muted between-color) - that's what makes it
@@ -105,7 +112,7 @@ export function Calendar({ initialMonth, start, end, hoverEnd, onDayClick, onDay
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 2 }}>
-        {WEEKDAY_LABELS.map((w) => (
+        {weekdayLabels.map((w) => (
           <div key={w} style={{ textAlign: 'center', fontSize: '0.6875rem', color: 'var(--text-muted)', padding: '0.25rem 0' }}>
             {w}
           </div>

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeToggle } from './ThemeToggle'
-import type { Theme } from '../lib/theme'
+import { applyTheme, type Theme } from '../lib/theme'
 
 const OPTION_LABELS = ['Светлая', 'Тёмная', 'OLED', 'Сепия']
 
@@ -177,6 +177,27 @@ describe('ThemeToggle (custom trigger)', () => {
     )
 
     expect(receivedTheme).toBe('sepia')
+  })
+
+  it('updates the trigger when THEME_CHANGE_EVENT reports a theme change', () => {
+    localStorage.setItem('schloss-theme', 'light')
+    render(
+      <ThemeToggle
+        trigger={({ theme, onClick }) => (
+          <button type="button" onClick={onClick}>
+            Current theme: {theme}
+          </button>
+        )}
+      />,
+    )
+
+    expect(screen.getByRole('button')).toHaveTextContent('Current theme: light')
+
+    act(() => {
+      applyTheme('dark', 200)
+    })
+
+    expect(screen.getByRole('button')).toHaveTextContent('Current theme: dark')
   })
 
   it('opens the same 4-option dropdown when the custom trigger is clicked', async () => {

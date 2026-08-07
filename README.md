@@ -66,7 +66,10 @@ button meant for a header's `rightSlot`; pass a `trigger` render prop
 (`({ theme, icon, onClick }) => ReactNode`) to fit it into a different
 context instead (e.g. a sidebar row) — see kuvert's `Layout.tsx` for an
 example — plus `align="left"|"right"` for which side the dropdown panel
-anchors to.
+anchors to. It also follows `THEME_CHANGE_EVENT`, so a choice adopted by
+`ThemeSync` immediately updates every mounted toggle. `ThemeSync` reconciles
+both GET and PUT responses by timestamp; a server-winning PUT is adopted only
+while it is newer than the latest local choice.
 
 `NumberField`/`AmountField` display thousand-space-grouped numbers while
 keeping the caller's state as a plain unformatted string, and select an
@@ -77,7 +80,10 @@ derived from an ISO 4217 `currencyCode` prop (defaults to `'RUB'`).
 popover, no native `<input type="date">`) speaking plain ISO
 `yyyy-mm-dd` strings — `DateRangeField` is a two-click range picker
 (first click = start, second = end, third restarts; a colored bar spans
-the selected range). Also exported: `handleArrowFieldNavigation` (attach
+the selected range). Both accept optional profile-facing `dateFormat`
+(`dmy`/`mdy`/`ymd`, default `dmy`) and `weekStartsOn` (`0` for Sunday or `1`
+for Monday, the default); the weekday headers and six-week day grid use the
+same week start. Also exported: `handleArrowFieldNavigation` (attach
 to a `<form>`'s `onKeyDown` — ArrowUp/ArrowDown move focus between
 fields instead of the browser's native per-element behavior) and the low-
 level `formatGroupedNumber`/`parseGroupedNumber`/`currencySymbol`
@@ -92,8 +98,8 @@ profile timezone gracefully falls back to browser-local formatting.
 `Modal` moves focus inside when opened, keeps Tab navigation within the
 dialog, and restores focus when closed, while retaining its Escape-to-close
 and Enter-to-primary-action behavior. Its focus trap ignores hidden and
-disabled controls and includes native tabbable `summary` and contenteditable
-elements.
+disabled controls, including controls disabled by an ancestor `fieldset`, and
+includes native tabbable `summary` and contenteditable elements.
 
 `Field` links inline error text to its input or select with
 `aria-describedby`; when callers supply their own descriptor IDs, the error ID

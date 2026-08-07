@@ -2,12 +2,24 @@
 // DateField/DateRangeField all speak plain ISO (yyyy-mm-dd) strings at
 // their public boundary; everything Date-object-shaped stays in here.
 
+import type { DateFormat } from './dateFormat'
+
 const MONTH_NAMES = [
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
 ]
 
-export const WEEKDAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+const WEEKDAY_LABELS_SUNDAY_FIRST = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'] as const
+
+export type WeekStartsOn = 0 | 1
+
+export function getWeekdayLabels(weekStartsOn: WeekStartsOn = 1): readonly string[] {
+  return weekStartsOn === 0
+    ? WEEKDAY_LABELS_SUNDAY_FIRST
+    : [...WEEKDAY_LABELS_SUNDAY_FIRST.slice(1), WEEKDAY_LABELS_SUNDAY_FIRST[0]]
+}
+
+export const WEEKDAY_LABELS = getWeekdayLabels()
 
 export function parseISODate(iso: string): Date | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
@@ -23,11 +35,13 @@ export function toISODate(date: Date): string {
   return `${y}-${m}-${d}`
 }
 
-export function formatDisplayDate(iso: string): string {
+export function formatDisplayDate(iso: string, dateFormat: DateFormat | null = 'dmy'): string {
   const date = parseISODate(iso)
   if (!date) return ''
   const d = String(date.getDate()).padStart(2, '0')
   const m = String(date.getMonth() + 1).padStart(2, '0')
+  if (dateFormat === 'mdy') return `${m}/${d}/${date.getFullYear()}`
+  if (dateFormat === 'ymd') return `${date.getFullYear()}-${m}-${d}`
   return `${d}.${m}.${date.getFullYear()}`
 }
 
@@ -50,12 +64,12 @@ export interface MonthCell {
   isToday: boolean
 }
 
-/** Always 42 cells (6 full weeks), Monday-first. Out-of-month cells carry
- * no usable date info for callers - Calendar renders them blank. */
-export function getMonthGrid(month: Date): MonthCell[] {
+/** Always 42 cells (6 full weeks). Out-of-month cells carry no usable date
+ * info for callers - Calendar renders them blank. */
+export function getMonthGrid(month: Date, weekStartsOn: WeekStartsOn = 1): MonthCell[] {
   const first = startOfMonth(month)
-  const mondayFirstIndex = (first.getDay() + 6) % 7
-  const gridStart = new Date(first.getFullYear(), first.getMonth(), 1 - mondayFirstIndex)
+  const leadingDays = (first.getDay() - weekStartsOn + 7) % 7
+  const gridStart = new Date(first.getFullYear(), first.getMonth(), 1 - leadingDays)
   const todayIso = toISODate(new Date())
 
   const cells: MonthCell[] = []
@@ -65,7 +79,7 @@ export function getMonthGrid(month: Date): MonthCell[] {
     cells.push({
       iso,
       day: d.getDate(),
-      inMonth: d.getMonth() === month.getMonth(),
+      inMonth: d.getMonth() === month.getMonth() && d.getFullYear() === month.getFullYear(),
       isToday: iso === todayIso,
     })
   }

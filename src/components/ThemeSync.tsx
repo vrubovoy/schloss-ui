@@ -23,7 +23,12 @@ export interface ThemeSyncProps {
   apiOrigin: string
 }
 
-function push(apiOrigin: string, theme: Theme, updatedAt: number) {
+function push(
+  apiOrigin: string,
+  theme: Theme,
+  updatedAt: number,
+  onResponse: (data: ThemeResponse | null) => void,
+) {
   // `keepalive` lets this survive the page unloading right after a theme
   // change (e.g. the visitor immediately navigates to another app) - a
   // plain fetch would otherwise risk being aborted mid-flight and the
@@ -33,7 +38,10 @@ function push(apiOrigin: string, theme: Theme, updatedAt: number) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ theme, updatedAt }),
     keepalive: true,
-  }).catch(() => {})
+  })
+    .then((res) => (res.ok ? (res.json() as Promise<ThemeResponse>) : null))
+    .then(onResponse)
+    .catch(() => {})
 }
 
 // The platform's three apps each live on their own subdomain (separate
@@ -55,6 +63,17 @@ export function ThemeSync({ apiOrigin }: ThemeSyncProps) {
   useEffect(() => {
     let cancelled = false
 
+    function adoptIfNewer(data: ThemeResponse | null) {
+      if (cancelled || !data) return
+      if (isTheme(data.theme) && data.updatedAt > getThemeUpdatedAt()) {
+        applyTheme(data.theme, data.updatedAt)
+      }
+    }
+
+    function pushAndReconcile(theme: Theme, updatedAt: number) {
+      push(apiOrigin, theme, updatedAt, adoptIfNewer)
+    }
+
     fetch(`${apiOrigin}${THEME_PATH}`)
       .then((res) => (res.ok ? (res.json() as Promise<ThemeResponse>) : null))
       .then((data) => {
@@ -66,14 +85,14 @@ export function ThemeSync({ apiOrigin }: ThemeSyncProps) {
           // This origin's own value is newer than what the API has (e.g.
           // it's never heard from this app before) - push it so the next
           // origin to ask picks it up.
-          push(apiOrigin, getStoredTheme(), localUpdatedAt)
+          pushAndReconcile(getStoredTheme(), localUpdatedAt)
         }
       })
       .catch(() => {})
 
     function onLocalThemeChange(event: Event) {
       const { theme, updatedAt } = (event as CustomEvent<ThemeChangeDetail>).detail
-      push(apiOrigin, theme, updatedAt)
+      pushAndReconcile(theme, updatedAt)
     }
 
     window.addEventListener(THEME_CHANGE_EVENT, onLocalThemeChange)

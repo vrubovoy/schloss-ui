@@ -2,7 +2,10 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { createPortal } from 'react-dom'
 import { Sun, Moon, Monitor, Coffee } from 'lucide-react'
 import { Button } from './Button'
-import { type Theme, THEMES, getStoredTheme, applyTheme } from '../lib/theme'
+import {
+  type Theme, type ThemeChangeDetail, THEMES, THEME_CHANGE_EVENT,
+  getStoredTheme, applyTheme,
+} from '../lib/theme'
 
 const ICONS: Record<Theme, ReactNode> = {
   light: <Sun size={16} />,
@@ -62,6 +65,13 @@ export function ThemeToggle({ trigger, align = 'right' }: ThemeToggleProps) {
   // choice happens.
   useEffect(() => {
     applyTheme(theme)
+
+    function onThemeChange(event: Event) {
+      setTheme((event as CustomEvent<ThemeChangeDetail>).detail.theme)
+    }
+
+    window.addEventListener(THEME_CHANGE_EVENT, onThemeChange)
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, onThemeChange)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

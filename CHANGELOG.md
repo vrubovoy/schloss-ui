@@ -233,6 +233,17 @@ fit best; add a new section if none fits.
   callers.
 - `Modal` focus trapping now excludes hidden and disabled candidates and
   recognizes contenteditable and `summary` elements as tabbable.
+- `ThemeSync` now reconciles the winning theme returned by a PUT, comparing
+  its timestamp against current local state when the response arrives so a
+  delayed response cannot replace a newer local choice. `ThemeToggle` now
+  follows `THEME_CHANGE_EVENT`, keeping custom and default triggers current
+  when another component applies a theme.
+- `Modal` focus trapping now also excludes form controls whose disabled state
+  comes from an ancestor `fieldset`.
+- `DateField` and `DateRangeField` now accept optional profile `dateFormat`
+  and `weekStartsOn` preferences. Shared date utilities derive display text,
+  weekday headers, and the corresponding Sunday- or Monday-first 42-cell grid
+  from those values while preserving the existing DMY/Monday defaults.
 
 ## Shared formatting
 - Added `formatDate` and the `DateFormat`/`DatePrefs` types for consistent
