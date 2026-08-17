@@ -22,6 +22,7 @@ export interface UseUnreadNotificationsOptions {
 }
 
 export type UnreadNotificationsState = HeaderNotificationState
+const UNAVAILABLE_STATE: UnreadNotificationsState = { status: 'error' }
 
 function isUnreadInvalidationMessage(value: unknown): value is UnreadInvalidationMessage {
   if (!value || typeof value !== 'object') return false
@@ -45,19 +46,17 @@ export function invalidateNotificationUnreadCount(): void {
   }
 }
 
-function normalizeTrustedOrigin(value: string): string {
+function normalizeTrustedOrigin(value: string): string | null {
   let url: URL
   try {
     url = new URL(value)
   } catch {
-    throw new Error('glockeOrigin must be an absolute trusted origin')
+    return null
   }
 
   const isOriginOnly = url.pathname === '/' && !url.search && !url.hash && !url.username && !url.password
   const isSecure = url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === 'localhost')
-  if (!isOriginOnly || !isSecure) {
-    throw new Error('glockeOrigin must be an HTTPS origin (HTTP is allowed only for localhost development)')
-  }
+  if (!isOriginOnly || !isSecure) return null
   return url.origin
 }
 
@@ -75,8 +74,10 @@ export function useUnreadNotifications({
   apiClient,
 }: UseUnreadNotificationsOptions): UnreadNotificationsState {
   const normalizedOrigin = normalizeTrustedOrigin(glockeOrigin)
-  const accessToken = apiClient.getAccessToken()
-  const [state, setState] = useState<UnreadNotificationsState>({ status: 'loading' })
+  const accessToken = normalizedOrigin ? apiClient.getAccessToken() : null
+  const [state, setState] = useState<UnreadNotificationsState>(
+    normalizedOrigin ? { status: 'loading' } : UNAVAILABLE_STATE,
+  )
   const generationRef = useRef(0)
   const apiClientRef = useRef(apiClient)
   const trackedTokenRef = useRef(accessToken)
@@ -90,6 +91,8 @@ export function useUnreadNotifications({
 
   useEffect(() => {
     const generation = ++generationRef.current
+    if (!normalizedOrigin) return
+
     let active = true
     let controller: AbortController | null = null
     let inFlight: Promise<void> | null = null
@@ -268,5 +271,5 @@ export function useUnreadNotifications({
     }
   }, [normalizedOrigin, tokenGeneration, userId])
 
-  return state
+  return normalizedOrigin ? state : UNAVAILABLE_STATE
 }

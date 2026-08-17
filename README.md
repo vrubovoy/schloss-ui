@@ -68,7 +68,10 @@ uses exact count-aware accessible labels and caps only its visual badge at
 `useUnreadNotifications({ glockeOrigin, userId, apiClient })` supplies that
 controlled state from Glocke's `/backend/notifications/unread-count` endpoint.
 The configured value must be an origin-only HTTPS URL (HTTP is accepted only
-for localhost development). The hook sends the in-memory bearer token with
+for localhost development). An invalid value fails closed as the nonfatal
+`{ status: 'error' }` state without installing listeners/timers or making a
+request, and recovers normally if a later render supplies a valid origin. The
+hook sends the in-memory bearer token with
 credentials omitted, polls while visible and online with jitter, refreshes on
 focus/visibility/page-show/online recovery, retains the last valid count on
 nonfatal failures, and silently refreshes and retries once on a 401. Every

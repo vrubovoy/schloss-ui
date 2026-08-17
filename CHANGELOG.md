@@ -309,3 +309,7 @@ fit best; add a new section if none fits.
   mandatory follow-up fetch, preventing a pre-mutation result from persisting;
   sender broadcasts do not duplicate their local invalidation, and unsupported
   browsers fall back cleanly to same-window invalidation.
+- Invalid Glocke origins now fail closed as a nonfatal unavailable unread state
+  instead of throwing during render. No request, listener, timer, or channel is
+  created until a valid secure origin is supplied, allowing configuration to
+  recover on a later render without crashing pre-auth/loading pages.

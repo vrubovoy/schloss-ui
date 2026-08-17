@@ -98,6 +98,43 @@ afterEach(() => {
 })
 
 describe('useUnreadNotifications request contract', () => {
+  it('degrades an invalid configured origin to a nonfatal unavailable state', () => {
+    const windowListeners = vi.spyOn(window, 'addEventListener')
+    const documentListeners = vi.spyOn(document, 'addEventListener')
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+    const broadcastChannel = vi.fn()
+    vi.stubGlobal('BroadcastChannel', broadcastChannel)
+    const { result } = renderHook(() => useUnreadNotifications({
+      glockeOrigin: 'not-an-origin',
+      userId: null,
+      apiClient: makeApiClient(null),
+    }))
+
+    expect(result.current).toEqual({ status: 'error' })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(setTimeoutSpy).not.toHaveBeenCalled()
+    expect(broadcastChannel).not.toHaveBeenCalled()
+    expect(windowListeners.mock.calls.map(([type]) => type)).not.toContain('focus')
+    expect(windowListeners.mock.calls.map(([type]) => type)).not.toContain('schloss-ui:notification-unread-count-invalidated')
+    expect(documentListeners.mock.calls.map(([type]) => type)).not.toContain('visibilitychange')
+  })
+
+  it('recovers normally when an invalid origin prop becomes valid', async () => {
+    const apiClient = makeApiClient('token-1')
+    fetchMock.mockResolvedValueOnce(response(200, { count: 3 }))
+    const { result, rerender } = renderHook(
+      ({ origin }) => useUnreadNotifications({ glockeOrigin: origin, userId: 'user-1', apiClient }),
+      { initialProps: { origin: 'http://glocke.example.test/path' } },
+    )
+
+    expect(result.current).toEqual({ status: 'error' })
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    rerender({ origin: glockeOrigin })
+    await waitFor(() => expect(result.current).toEqual({ status: 'ready', unreadCount: 3 }))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('starts loading and immediately fetches the exact configured Glocke origin/path with bearer auth and omitted credentials', async () => {
     const pending = deferred<Response>()
     fetchMock.mockReturnValueOnce(pending.promise)
