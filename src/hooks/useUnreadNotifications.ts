@@ -48,7 +48,7 @@ export function invalidateNotificationUnreadCount(): void {
 
 function isNonPublicHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '')
-  if (host === 'localhost') return false
+  if (host === 'localhost' || host === 'glocke.localhost') return false
   if (!host.includes('.') && !host.includes(':')) return true
   if (['.internal', '.lan', '.local', '.localdomain', '.localhost', '.home', '.home.arpa'].some((suffix) => host.endsWith(suffix))) return true
 

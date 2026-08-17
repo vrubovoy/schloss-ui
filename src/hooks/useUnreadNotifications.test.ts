@@ -86,6 +86,7 @@ describe('normalizeNotificationOrigin', () => {
   it.each([
     ['https://glocke.example.test', 'https://glocke.example.test'],
     ['https://GLOCKE.example.test:443/', 'https://glocke.example.test'],
+    ['https://glocke.localhost', 'https://glocke.localhost'],
     ['http://localhost', 'http://localhost'],
     ['http://localhost:5173/', 'http://localhost:5173'],
   ])('normalizes trusted origin %s', (value, expected) => {
