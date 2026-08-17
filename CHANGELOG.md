@@ -31,6 +31,10 @@ fit best; add a new section if none fits.
   circle instead of text; settings/logout are icon-only buttons gated on
   a user being present; `leftSlot`/`rightSlot` cover service-specific
   extras (a mobile nav toggle, a theme toggle).
+- `Header` gained an additive controlled notification contract for authenticated
+  users. It renders a compact accessible Bell link after `rightSlot` and before
+  logout/avatar, with loading/error visuals, exact count labels, a `99+`-capped
+  visual badge, keyboard focus treatment, and responsive clamped spacing.
 - `Footer`: extracted as-is, parameterized by `serviceName`.
 - `EmptyState`: replaces raw-emoji empty states with an accent-tinted
   icon badge, a title, one sentence of copy, and a primary action
@@ -279,3 +283,37 @@ fit best; add a new section if none fits.
   are not part of this hook).
 - A request that remains unauthorized after a successful token refresh now
   clears the refreshed in-memory token and calls `onUnauthorized` once.
+- `ApiClient.refreshAccessToken()` exposes silent refresh as a public
+  single-flight operation without invoking `onUnauthorized`; ordinary 401
+  handling now shares that implementation without changing redirect behavior.
+  Refreshes are generation-fenced against logout or newer tokens. The method is
+  optional on the source-compatible `ApiClient` shape while `CreatedApiClient`,
+  returned by `createApiClient`, guarantees it. Single-flight deduplication is
+  external-session-generation-scoped, while internal token rotation keeps sibling
+  requests in the same session: a concurrent old-token 401 retries once with the
+  current refreshed token instead of failing or refreshing again. Logout/new-login
+  still fences stale requests and refreshes without clearing or redirecting the
+  newer session.
+- Added `useUnreadNotifications`, an auth-safe Glocke unread-count lifecycle
+  with strict origin validation, bearer-only cross-origin requests, jittered
+  visible/online polling, throttled recovery refreshes, abort and stale-response
+  protection, retained counts on nonfatal errors, and one refresh/retry on 401.
+  Legacy clients without the optional refresh method fail nonfatally, and quick
+  hidden/offline recovery still restores the polling timer inside the throttle.
+  Poll and retry authorization always comes from the client's live token, never
+  a hook-cached value after logout or token replacement.
+- Added `invalidateNotificationUnreadCount()` for mutation-driven refreshes.
+  Hooks refresh immediately in the same window and synchronize invalidations
+  across same-origin tabs with a safe `BroadcastChannel` message containing no
+  auth or notification data. Invalidations received in flight coalesce into one
+  mandatory follow-up fetch, preventing a pre-mutation result from persisting;
+  sender broadcasts do not duplicate their local invalidation, and unsupported
+  browsers fall back cleanly to same-window invalidation.
+- Invalid Glocke origins now fail closed as a nonfatal unavailable unread state
+  instead of throwing during render. No request, listener, timer, or channel is
+  created until a valid secure origin is supplied, allowing configuration to
+  recover on a later render without crashing pre-auth/loading pages.
+- Exported `normalizeNotificationOrigin()` as the hook's single public trust
+  boundary. It canonicalizes public HTTPS and exact localhost-development HTTP
+  origins while rejecting active/file schemes, credentials, URL suffixes,
+  internal names, private addresses, and other plaintext origins.

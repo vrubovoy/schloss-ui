@@ -1,9 +1,19 @@
-import type { ReactNode } from 'react'
-import { LogOut } from 'lucide-react'
+import { useState, type FocusEvent, type ReactNode } from 'react'
+import { Bell, LogOut } from 'lucide-react'
 import { useHover } from '../hooks/useHover'
 
 export interface HeaderUser {
   name: string
+}
+
+export type HeaderNotificationState =
+  | { status: 'loading' }
+  | { status: 'ready'; unreadCount: number }
+  | { status: 'error'; unreadCount?: number }
+
+export interface HeaderNotifications {
+  href: string
+  state: HeaderNotificationState
 }
 
 export interface HeaderProps {
@@ -20,6 +30,8 @@ export interface HeaderProps {
   leftSlot?: ReactNode
   /** Anything service-specific rendered before settings/logout/avatar, e.g. a theme toggle. */
   rightSlot?: ReactNode
+  /** Controlled notification destination and unread state. Only shown for a user. */
+  notifications?: HeaderNotifications
 }
 
 function initial(name: string): string {
@@ -57,6 +69,99 @@ function HeaderIconButton({ onClick, title, children }: HeaderIconButtonProps) {
     >
       {children}
     </button>
+  )
+}
+
+function notificationLabel(state: HeaderNotificationState): string {
+  if (state.status === 'loading') return 'Уведомления: загрузка числа непрочитанных'
+  if (state.status === 'error' && state.unreadCount === undefined) {
+    return 'Уведомления: число непрочитанных недоступно'
+  }
+
+  const count = state.unreadCount
+  const countLabel = count === 0
+    ? 'Уведомления: непрочитанных нет'
+    : `Уведомления: непрочитанных — ${count}`
+  return state.status === 'error' ? `${countLabel}, данные могут быть устаревшими` : countLabel
+}
+
+function NotificationLink({ href, state }: HeaderNotifications) {
+  const [focusVisible, setFocusVisible] = useState(false)
+  const count = state.status === 'loading' ? undefined : state.unreadCount
+  const showBadge = count !== undefined && count > 0
+  const statusColor = state.status === 'error' ? 'var(--danger)' : 'var(--accent)'
+
+  function handleFocus(event: FocusEvent<HTMLAnchorElement>) {
+    setFocusVisible(event.currentTarget.matches(':focus-visible'))
+  }
+
+  return (
+    <a
+      href={href}
+      aria-label={notificationLabel(state)}
+      onFocus={handleFocus}
+      onBlur={() => setFocusVisible(false)}
+      style={{
+        width: 32,
+        height: 32,
+        flexShrink: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        borderRadius: 'var(--radius-sm)',
+        color: state.status === 'error' ? 'var(--danger)' : 'var(--text-secondary)',
+        textDecoration: 'none',
+        outline: focusVisible ? '2px solid var(--text-primary)' : '2px solid transparent',
+        outlineOffset: 2,
+        transition: 'background 150ms, color 150ms, outline-color 150ms',
+      }}
+    >
+      <Bell size={16} strokeWidth={2} aria-hidden="true" />
+      {showBadge && (
+        <span
+          data-notification-badge=""
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: -3,
+            right: -5,
+            minWidth: 16,
+            height: 16,
+            padding: '0 3px',
+            boxSizing: 'border-box',
+            borderRadius: 8,
+            background: statusColor,
+            color: 'var(--text-inverted, #fff)',
+            border: '2px solid var(--bg-surface)',
+            fontSize: '0.625rem',
+            fontWeight: 700,
+            lineHeight: '12px',
+            textAlign: 'center',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
+      {(state.status === 'loading' || (state.status === 'error' && count === undefined)) && (
+        <span
+          data-notification-status={state.status}
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: 3,
+            right: 3,
+            width: 6,
+            height: 6,
+            boxSizing: 'border-box',
+            borderRadius: '50%',
+            background: state.status === 'loading' ? 'transparent' : statusColor,
+            border: state.status === 'loading' ? `1px solid ${statusColor}` : 'none',
+          }}
+        />
+      )}
+    </a>
   )
 }
 
@@ -123,13 +228,14 @@ export function Header({
   onLogout,
   leftSlot,
   rightSlot,
+  notifications,
 }: HeaderProps) {
   return (
     <header
       style={{
         background: 'var(--bg-surface)',
         borderBottom: '1px solid var(--border)',
-        padding: '0 1.5rem',
+        padding: '0 clamp(0.75rem, 3vw, 1.5rem)',
         height: 56,
         display: 'flex',
         alignItems: 'center',
@@ -138,10 +244,10 @@ export function Header({
         position: 'sticky',
         top: 0,
         zIndex: 30,
-        gap: '0.75rem',
+        gap: 'clamp(0.5rem, 2vw, 0.75rem)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(0.5rem, 2vw, 0.75rem)', minWidth: 0 }}>
         {leftSlot}
         <a
           href={homeHref}
@@ -162,8 +268,9 @@ export function Header({
       </div>
 
       {(user || rightSlot) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(0.375rem, 1.5vw, 0.625rem)', minWidth: 0 }}>
           {rightSlot}
+          {user && notifications && <NotificationLink {...notifications} />}
           {user && onLogout && (
             <HeaderIconButton onClick={onLogout} title="Выйти">
               <LogOut size={16} strokeWidth={2} />

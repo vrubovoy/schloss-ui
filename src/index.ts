@@ -1,5 +1,5 @@
 export { Header } from './components/Header'
-export type { HeaderProps, HeaderUser } from './components/Header'
+export type { HeaderNotificationState, HeaderNotifications, HeaderProps, HeaderUser } from './components/Header'
 
 export { Footer } from './components/Footer'
 export type { FooterProps } from './components/Footer'
@@ -73,9 +73,12 @@ export { generateCodeVerifier, generateCodeChallenge } from './auth/pkce'
 export { buildLoginUrl, buildLogoutUrl, buildAccountUrl, CODE_VERIFIER_STORAGE_KEY } from './auth/authRedirect'
 export type { AuthRedirectConfig } from './auth/authRedirect'
 export { createApiClient, ApiError } from './auth/apiClient'
-export type { ApiClient, CreateApiClientConfig } from './auth/apiClient'
+export type { ApiClient, CreatedApiClient, CreateApiClientConfig } from './auth/apiClient'
 export { AuthContext, useAuth, useAuthProvider } from './auth/useAuthProvider'
 export type { AuthUser, AuthState, UseAuthProviderConfig } from './auth/useAuthProvider'
 
 export { useSidebarWidth } from './hooks/useSidebarWidth'
 export type { UseSidebarWidthOptions, UseSidebarWidthResult } from './hooks/useSidebarWidth'
+
+export { invalidateNotificationUnreadCount, normalizeNotificationOrigin, useUnreadNotifications } from './hooks/useUnreadNotifications'
+export type { UnreadNotificationsState, UseUnreadNotificationsOptions } from './hooks/useUnreadNotifications'

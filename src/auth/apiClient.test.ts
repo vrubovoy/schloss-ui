@@ -280,4 +280,162 @@ describe('401 handling - refresh + retry', () => {
 
     await expect(client.get('/foo')).rejects.toBeInstanceOf(ApiError)
   })
+
+  it('does not clear or redirect for a newer token set while the automatic refresh is in flight', async () => {
+    let resolveRefresh!: (response: Response) => void
+    const onUnauthorized = vi.fn()
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(401, {}))
+      .mockReturnValueOnce(new Promise<Response>((resolve) => { resolveRefresh = resolve }))
+    const client = createApiClient({ base: '/api', onUnauthorized })
+    client.setAccessToken('expired-token')
+
+    const request = client.get('/foo')
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    client.setAccessToken('newer-token')
+    resolveRefresh(jsonResponse(200, { accessToken: 'late-token' }))
+
+    await expect(request).rejects.toMatchObject({ status: 401 })
+    expect(client.getAccessToken()).toBe('newer-token')
+    expect(onUnauthorized).not.toHaveBeenCalled()
+  })
+
+  it('does not refresh or replay a stale 401 that arrives after the external session generation changes', async () => {
+    let resolveRequest!: (response: Response) => void
+    const onUnauthorized = vi.fn()
+    fetchMock.mockReturnValueOnce(new Promise<Response>((resolve) => { resolveRequest = resolve }))
+    const client = createApiClient({ base: '/api', onUnauthorized })
+    client.setAccessToken('old-token')
+
+    const request = client.get('/foo')
+    client.setAccessToken('newer-token')
+    resolveRequest(jsonResponse(401, {}))
+
+    await expect(request).rejects.toMatchObject({ status: 401 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(client.getAccessToken()).toBe('newer-token')
+    expect(onUnauthorized).not.toHaveBeenCalled()
+  })
+
+  it('retries a concurrent old-token 401 with the token refreshed by a sibling request', async () => {
+    let resolveSecondRequest!: (response: Response) => void
+    const onUnauthorized = vi.fn()
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(401, {}))
+      .mockReturnValueOnce(new Promise<Response>((resolve) => { resolveSecondRequest = resolve }))
+      .mockResolvedValueOnce(jsonResponse(200, { accessToken: 'fresh-token' }))
+      .mockResolvedValueOnce(jsonResponse(200, { request: 'first' }))
+      .mockResolvedValueOnce(jsonResponse(200, { request: 'second' }))
+    const client = createApiClient({ base: '/api', onUnauthorized })
+    client.setAccessToken('old-token')
+
+    const first = client.get('/first')
+    const second = client.get('/second')
+    await expect(first).resolves.toEqual({ request: 'first' })
+    resolveSecondRequest(jsonResponse(401, {}))
+    await expect(second).resolves.toEqual({ request: 'second' })
+
+    expect(fetchMock).toHaveBeenCalledTimes(5)
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/auth/refresh')).toHaveLength(1)
+    const [retryUrl, retryInit] = fetchMock.mock.calls[4] as [string, RequestInit]
+    expect(retryUrl).toBe('/api/second')
+    expect(header(retryInit, 'Authorization')).toBe('Bearer fresh-token')
+    expect(client.getAccessToken()).toBe('fresh-token')
+    expect(onUnauthorized).not.toHaveBeenCalled()
+  })
+})
+
+describe('refreshAccessToken', () => {
+  it('silently refreshes through the same-origin auth path and returns and stores the token', async () => {
+    const onUnauthorized = vi.fn()
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { accessToken: 'fresh-token' }))
+    const client = createApiClient({ base: '/api', authBase: '/custom-auth', onUnauthorized })
+
+    await expect(client.refreshAccessToken()).resolves.toBe('fresh-token')
+
+    expect(client.getAccessToken()).toBe('fresh-token')
+    expect(fetchMock).toHaveBeenCalledWith('/custom-auth/refresh', { method: 'POST', credentials: 'include' })
+    expect(onUnauthorized).not.toHaveBeenCalled()
+  })
+
+  it('returns null without redirecting when refresh fails', async () => {
+    const onUnauthorized = vi.fn()
+    fetchMock.mockResolvedValueOnce(jsonResponse(401, {}))
+    const client = createApiClient({ base: '/api', onUnauthorized })
+
+    await expect(client.refreshAccessToken()).resolves.toBeNull()
+    expect(onUnauthorized).not.toHaveBeenCalled()
+  })
+
+  it('is single-flight across concurrent callers', async () => {
+    const pending = new Promise<Response>((resolve) => {
+      queueMicrotask(() => resolve(jsonResponse(200, { accessToken: 'shared-token' })))
+    })
+    fetchMock.mockReturnValueOnce(pending)
+    const client = createApiClient({ base: '/api', onUnauthorized: vi.fn() })
+
+    const first = client.refreshAccessToken()
+    const second = client.refreshAccessToken()
+
+    expect(first).toBe(second)
+    await expect(Promise.all([first, second])).resolves.toEqual(['shared-token', 'shared-token'])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not restore a token when logout occurs while refresh is in flight', async () => {
+    let resolveRefresh!: (response: Response) => void
+    fetchMock.mockReturnValueOnce(new Promise<Response>((resolve) => { resolveRefresh = resolve }))
+    const client = createApiClient({ base: '/api', onUnauthorized: vi.fn() })
+    client.setAccessToken('expired-token')
+
+    const refresh = client.refreshAccessToken()
+    client.setAccessToken(null)
+    resolveRefresh(jsonResponse(200, { accessToken: 'late-token' }))
+
+    await expect(refresh).resolves.toBeNull()
+    expect(client.getAccessToken()).toBeNull()
+  })
+
+  it('does not overwrite a newer token when an older refresh finishes late', async () => {
+    let resolveRefresh!: (response: Response) => void
+    fetchMock.mockReturnValueOnce(new Promise<Response>((resolve) => { resolveRefresh = resolve }))
+    const client = createApiClient({ base: '/api', onUnauthorized: vi.fn() })
+    client.setAccessToken('expired-token')
+
+    const refresh = client.refreshAccessToken()
+    client.setAccessToken('newer-token')
+    resolveRefresh(jsonResponse(200, { accessToken: 'late-token' }))
+
+    await expect(refresh).resolves.toBeNull()
+    expect(client.getAccessToken()).toBe('newer-token')
+  })
+
+  it('scopes single-flight refreshes to their external session generation', async () => {
+    let resolveOld!: (response: Response) => void
+    let resolveNew!: (response: Response) => void
+    fetchMock
+      .mockReturnValueOnce(new Promise<Response>((resolve) => { resolveOld = resolve }))
+      .mockReturnValueOnce(new Promise<Response>((resolve) => { resolveNew = resolve }))
+    const client = createApiClient({ base: '/api', onUnauthorized: vi.fn() })
+    client.setAccessToken('old-token')
+
+    const oldFlight = client.refreshAccessToken()
+    client.setAccessToken('newer-token')
+    const newFlight = client.refreshAccessToken()
+
+    expect(newFlight).not.toBe(oldFlight)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    resolveOld(jsonResponse(200, { accessToken: 'stale-refreshed-token' }))
+    await expect(oldFlight).resolves.toBeNull()
+
+    const joinedNewFlight = client.refreshAccessToken()
+    expect(joinedNewFlight).toBe(newFlight)
+    resolveNew(jsonResponse(200, { accessToken: 'current-refreshed-token' }))
+
+    await expect(Promise.all([newFlight, joinedNewFlight])).resolves.toEqual([
+      'current-refreshed-token',
+      'current-refreshed-token',
+    ])
+    expect(client.getAccessToken()).toBe('current-refreshed-token')
+  })
 })
