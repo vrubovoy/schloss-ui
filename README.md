@@ -89,6 +89,14 @@ const notificationState = useUnreadNotifications({ glockeOrigin, userId: user?.i
 />
 ```
 
+After a successful notification mutation, call
+`invalidateNotificationUnreadCount()`. Mounted unread hooks in the current
+window refresh immediately (without waiting for the focus-recovery throttle),
+and same-origin tabs are notified through `BroadcastChannel`. In-flight unread
+requests are coalesced, unsupported browsers retain same-window behavior, and
+the cross-tab message contains only an invalidation type plus an opaque sender
+ID, never a token, count, or notification content.
+
 `ThemeToggle` is a dropdown for picking one of the platform's four themes
 (`light`/`dark`/`oled`/`sepia`, see the `Theme`/`THEMES`/`getStoredTheme`/
 `applyTheme` exports it's built on). Its default look is a ghost icon

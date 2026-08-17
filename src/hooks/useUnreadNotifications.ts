@@ -5,6 +5,15 @@ import type { HeaderNotificationState } from '../components/Header'
 const POLL_INTERVAL_MS = 60_000
 const POLL_JITTER_MS = 6_000
 const RECOVERY_THROTTLE_MS = 5_000
+const UNREAD_INVALIDATION_EVENT = 'schloss-ui:notification-unread-count-invalidated'
+const UNREAD_INVALIDATION_CHANNEL = 'schloss-ui:notification-unread-count'
+const UNREAD_INVALIDATION_MESSAGE = 'invalidate'
+const INVALIDATION_SOURCE = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
+
+interface UnreadInvalidationMessage {
+  type: typeof UNREAD_INVALIDATION_MESSAGE
+  source: string
+}
 
 export interface UseUnreadNotificationsOptions {
   glockeOrigin: string
@@ -13,6 +22,28 @@ export interface UseUnreadNotificationsOptions {
 }
 
 export type UnreadNotificationsState = HeaderNotificationState
+
+function isUnreadInvalidationMessage(value: unknown): value is UnreadInvalidationMessage {
+  if (!value || typeof value !== 'object') return false
+  const message = value as Partial<UnreadInvalidationMessage>
+  return message.type === UNREAD_INVALIDATION_MESSAGE && typeof message.source === 'string'
+}
+
+/** Signals that notification mutations may have changed the unread count. */
+export function invalidateNotificationUnreadCount(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(UNREAD_INVALIDATION_EVENT))
+  if (typeof BroadcastChannel === 'undefined') return
+
+  let channel: BroadcastChannel | null = null
+  try {
+    channel = new BroadcastChannel(UNREAD_INVALIDATION_CHANNEL)
+    channel.postMessage({ type: UNREAD_INVALIDATION_MESSAGE, source: INVALIDATION_SOURCE } satisfies UnreadInvalidationMessage)
+  } catch {
+    // Same-window invalidation still works when BroadcastChannel is unavailable.
+  } finally {
+    channel?.close()
+  }
+}
 
 function normalizeTrustedOrigin(value: string): string {
   let url: URL
@@ -171,6 +202,27 @@ export function useUnreadNotifications({
       schedulePoll()
     }
 
+    function invalidate() {
+      void request()
+      schedulePoll()
+    }
+
+    let invalidationChannel: BroadcastChannel | null = null
+    function handleInvalidationMessage(event: MessageEvent<unknown>) {
+      if (!isUnreadInvalidationMessage(event.data) || event.data.source === INVALIDATION_SOURCE) return
+      invalidate()
+    }
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        invalidationChannel = new BroadcastChannel(UNREAD_INVALIDATION_CHANNEL)
+        invalidationChannel.addEventListener('message', handleInvalidationMessage)
+      } catch {
+        invalidationChannel?.close()
+        invalidationChannel = null
+      }
+    }
+
     setState({ status: 'loading' })
     if (canRequest()) {
       void request()
@@ -181,6 +233,7 @@ export function useUnreadNotifications({
     window.addEventListener('pageshow', recover)
     window.addEventListener('online', recover)
     window.addEventListener('offline', recover)
+    window.addEventListener(UNREAD_INVALIDATION_EVENT, invalidate)
     document.addEventListener('visibilitychange', recover)
 
     return () => {
@@ -191,7 +244,12 @@ export function useUnreadNotifications({
       window.removeEventListener('pageshow', recover)
       window.removeEventListener('online', recover)
       window.removeEventListener('offline', recover)
+      window.removeEventListener(UNREAD_INVALIDATION_EVENT, invalidate)
       document.removeEventListener('visibilitychange', recover)
+      if (invalidationChannel) {
+        invalidationChannel.removeEventListener('message', handleInvalidationMessage)
+        invalidationChannel.close()
+      }
     }
   }, [normalizedOrigin, tokenGeneration, userId])
 

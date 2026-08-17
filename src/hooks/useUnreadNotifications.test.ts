@@ -1,7 +1,7 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApiClient } from '../auth/apiClient'
-import { useUnreadNotifications } from './useUnreadNotifications'
+import { invalidateNotificationUnreadCount, useUnreadNotifications } from './useUnreadNotifications'
 
 function response(status: number, body: unknown): Response {
   return {
@@ -42,12 +42,49 @@ function setOnline(value: boolean) {
   Object.defineProperty(navigator, 'onLine', { configurable: true, value })
 }
 
+class MockBroadcastChannel {
+  static instances: MockBroadcastChannel[] = []
+  readonly name: string
+  readonly messages: unknown[] = []
+  private readonly listeners = new Set<(event: MessageEvent<unknown>) => void>()
+  private closed = false
+
+  constructor(name: string) {
+    this.name = name
+    MockBroadcastChannel.instances.push(this)
+  }
+
+  postMessage(message: unknown) {
+    this.messages.push(message)
+    for (const channel of MockBroadcastChannel.instances) {
+      if (channel === this || channel.closed || channel.name !== this.name) continue
+      queueMicrotask(() => {
+        const event = new MessageEvent('message', { data: message })
+        for (const listener of channel.listeners) listener(event)
+      })
+    }
+  }
+
+  addEventListener(type: string, listener: (event: MessageEvent<unknown>) => void) {
+    if (type === 'message') this.listeners.add(listener)
+  }
+
+  removeEventListener(type: string, listener: (event: MessageEvent<unknown>) => void) {
+    if (type === 'message') this.listeners.delete(listener)
+  }
+
+  close() {
+    this.closed = true
+  }
+}
+
 const glockeOrigin = 'https://glocke.example.test'
 const unreadUrl = `${glockeOrigin}/backend/notifications/unread-count`
 let fetchMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   fetchMock = vi.fn()
+  MockBroadcastChannel.instances = []
   vi.stubGlobal('fetch', fetchMock)
   setVisibility('visible')
   setOnline(true)
@@ -121,6 +158,59 @@ describe('useUnreadNotifications request contract', () => {
 })
 
 describe('useUnreadNotifications refresh lifecycle', () => {
+  it('refreshes immediately when the current origin publishes an unread invalidation', async () => {
+    fetchMock.mockResolvedValue(response(200, { count: 1 }))
+    renderHook(() => useUnreadNotifications({ glockeOrigin, userId: 'user-1', apiClient: makeApiClient() }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+
+    act(() => invalidateNotificationUnreadCount())
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+  })
+
+  it('coalesces unread invalidation with an unread request already in flight', async () => {
+    const pending = deferred<Response>()
+    fetchMock.mockReturnValueOnce(pending.promise)
+    renderHook(() => useUnreadNotifications({ glockeOrigin, userId: 'user-1', apiClient: makeApiClient() }))
+
+    act(() => invalidateNotificationUnreadCount())
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    pending.resolve(response(200, { count: 1 }))
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+  })
+
+  it('broadcasts a safe cross-tab invalidation without double-fetching in the sender window', async () => {
+    vi.stubGlobal('BroadcastChannel', MockBroadcastChannel)
+    fetchMock.mockResolvedValue(response(200, { count: 1 }))
+    renderHook(() => useUnreadNotifications({ glockeOrigin, userId: 'user-1', apiClient: makeApiClient() }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+
+    act(() => invalidateNotificationUnreadCount())
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+    const publisher = MockBroadcastChannel.instances.at(-1)
+    expect(publisher?.messages).toHaveLength(1)
+    expect(publisher?.messages[0]).toMatchObject({ type: 'invalidate' })
+    expect(Object.keys(publisher?.messages[0] as object).sort()).toEqual(['source', 'type'])
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    const remoteTab = new MockBroadcastChannel(publisher!.name)
+    remoteTab.postMessage({ type: 'invalidate', source: 'another-tab' })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
+    remoteTab.close()
+  })
+
+  it('keeps same-window invalidation working when BroadcastChannel is unsupported', async () => {
+    vi.stubGlobal('BroadcastChannel', undefined)
+    fetchMock.mockResolvedValue(response(200, { count: 1 }))
+    renderHook(() => useUnreadNotifications({ glockeOrigin, userId: 'user-1', apiClient: makeApiClient() }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+
+    expect(() => invalidateNotificationUnreadCount()).not.toThrow()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+  })
+
   it('polls while visible and online at a jittered interval centered on 60 seconds', async () => {
     vi.useFakeTimers()
     vi.spyOn(Math, 'random').mockReturnValue(0.75)

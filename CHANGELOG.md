@@ -302,3 +302,9 @@ fit best; add a new section if none fits.
   hidden/offline recovery still restores the polling timer inside the throttle.
   Poll and retry authorization always comes from the client's live token, never
   a hook-cached value after logout or token replacement.
+- Added `invalidateNotificationUnreadCount()` for mutation-driven refreshes.
+  Hooks refresh immediately in the same window and synchronize invalidations
+  across same-origin tabs with a safe `BroadcastChannel` message containing no
+  auth or notification data. In-flight requests coalesce, sender broadcasts do
+  not trigger a second local fetch, and unsupported browsers fall back cleanly
+  to same-window invalidation.
