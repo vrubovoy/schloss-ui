@@ -1,0 +1,199 @@
+import { useEffect, useRef, useState } from 'react'
+import type { ApiClient } from '../auth/apiClient'
+import type { HeaderNotificationState } from '../components/Header'
+
+const POLL_INTERVAL_MS = 60_000
+const POLL_JITTER_MS = 6_000
+const RECOVERY_THROTTLE_MS = 5_000
+
+export interface UseUnreadNotificationsOptions {
+  glockeOrigin: string
+  userId: string | null
+  apiClient: ApiClient
+}
+
+export type UnreadNotificationsState = HeaderNotificationState
+
+function normalizeTrustedOrigin(value: string): string {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new Error('glockeOrigin must be an absolute trusted origin')
+  }
+
+  const isOriginOnly = url.pathname === '/' && !url.search && !url.hash && !url.username && !url.password
+  const isSecure = url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === 'localhost')
+  if (!isOriginOnly || !isSecure) {
+    throw new Error('glockeOrigin must be an HTTPS origin (HTTP is allowed only for localhost development)')
+  }
+  return url.origin
+}
+
+function isUnreadCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+function pollingDelay(): number {
+  return POLL_INTERVAL_MS + (Math.random() * 2 - 1) * POLL_JITTER_MS
+}
+
+export function useUnreadNotifications({
+  glockeOrigin,
+  userId,
+  apiClient,
+}: UseUnreadNotificationsOptions): UnreadNotificationsState {
+  const normalizedOrigin = normalizeTrustedOrigin(glockeOrigin)
+  const accessToken = apiClient.getAccessToken()
+  const [state, setState] = useState<UnreadNotificationsState>({ status: 'loading' })
+  const generationRef = useRef(0)
+  const apiClientRef = useRef(apiClient)
+  const trackedTokenRef = useRef(accessToken)
+  const tokenGenerationRef = useRef(0)
+  apiClientRef.current = apiClient
+  if (trackedTokenRef.current !== accessToken) {
+    trackedTokenRef.current = accessToken
+    tokenGenerationRef.current += 1
+  }
+  const tokenGeneration = tokenGenerationRef.current
+
+  useEffect(() => {
+    const generation = ++generationRef.current
+    let active = true
+    let controller: AbortController | null = null
+    let inFlight: Promise<void> | null = null
+    let pollTimer: ReturnType<typeof setTimeout> | null = null
+    let lastGoodCount: number | undefined
+    let lastRequestAt: number | null = null
+
+    const isCurrent = () => active && generationRef.current === generation
+    const canRequest = () => Boolean(
+      userId
+      && apiClientRef.current.getAccessToken()
+      && document.visibilityState === 'visible'
+      && navigator.onLine,
+    )
+
+    function updateError() {
+      if (!isCurrent()) return
+      setState(lastGoodCount === undefined
+        ? { status: 'error' }
+        : { status: 'error', unreadCount: lastGoodCount })
+    }
+
+    async function authenticatedFetch(token: string, signal: AbortSignal): Promise<Response> {
+      return fetch(`${normalizedOrigin}/backend/notifications/unread-count`, {
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'omit',
+        signal,
+      })
+    }
+
+    function request(): Promise<void> {
+      if (inFlight || !canRequest()) return inFlight ?? Promise.resolve()
+
+      const requestToken = apiClientRef.current.getAccessToken()
+      if (!requestToken) return Promise.resolve()
+
+      lastRequestAt = Date.now()
+      controller = new AbortController()
+      const requestController = controller
+      let run!: Promise<void>
+      run = (async () => {
+        try {
+          let response = await authenticatedFetch(requestToken, requestController.signal)
+          if (response.status === 401 && isCurrent()) {
+            const client = apiClientRef.current
+            if (client.getAccessToken() !== requestToken) {
+              updateError()
+              return
+            }
+            const refreshedToken = client.refreshAccessToken
+              ? await client.refreshAccessToken()
+              : null
+            if (!isCurrent() || requestController.signal.aborted) return
+            const liveToken = client.getAccessToken()
+            if (refreshedToken && liveToken === refreshedToken) {
+              trackedTokenRef.current = liveToken
+              response = await authenticatedFetch(liveToken, requestController.signal)
+            }
+          }
+
+          if (!response.ok) {
+            updateError()
+            return
+          }
+          const payload = (await response.json()) as { count?: unknown }
+          if (!isUnreadCount(payload.count)) {
+            updateError()
+            return
+          }
+          if (!isCurrent()) return
+          lastGoodCount = payload.count
+          setState({ status: 'ready', unreadCount: payload.count })
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') return
+          updateError()
+        } finally {
+          if (inFlight === run) inFlight = null
+          if (controller === requestController) controller = null
+        }
+      })()
+      inFlight = run
+      return run
+    }
+
+    function schedulePoll() {
+      if (pollTimer) clearTimeout(pollTimer)
+      if (!canRequest()) {
+        pollTimer = null
+        return
+      }
+      pollTimer = setTimeout(() => {
+        pollTimer = null
+        void request()
+        schedulePoll()
+      }, pollingDelay())
+    }
+
+    function recover() {
+      if (!canRequest()) {
+        if (pollTimer) clearTimeout(pollTimer)
+        pollTimer = null
+        return
+      }
+      const now = Date.now()
+      if (lastRequestAt !== null && now - lastRequestAt < RECOVERY_THROTTLE_MS) {
+        schedulePoll()
+        return
+      }
+      void request()
+      schedulePoll()
+    }
+
+    setState({ status: 'loading' })
+    if (canRequest()) {
+      void request()
+      schedulePoll()
+    }
+
+    window.addEventListener('focus', recover)
+    window.addEventListener('pageshow', recover)
+    window.addEventListener('online', recover)
+    window.addEventListener('offline', recover)
+    document.addEventListener('visibilitychange', recover)
+
+    return () => {
+      active = false
+      controller?.abort()
+      if (pollTimer) clearTimeout(pollTimer)
+      window.removeEventListener('focus', recover)
+      window.removeEventListener('pageshow', recover)
+      window.removeEventListener('online', recover)
+      window.removeEventListener('offline', recover)
+      document.removeEventListener('visibilitychange', recover)
+    }
+  }, [normalizedOrigin, tokenGeneration, userId])
+
+  return state
+}

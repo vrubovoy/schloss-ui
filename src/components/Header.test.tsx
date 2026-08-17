@@ -240,6 +240,118 @@ describe('Header', () => {
     expect(onSettings).toHaveBeenCalledTimes(1)
     expect(onLogout).toHaveBeenCalledTimes(1)
   })
+
+  it('renders notifications as a native anchor only for an authenticated user', () => {
+    const notifications = { href: 'https://glocke.example.test/notifications', state: { status: 'ready' as const, unreadCount: 4 } }
+    const { rerender } = render(
+      <Header logo={<span>LOGO</span>} homeHref="/" notifications={notifications} />,
+    )
+
+    expect(screen.queryByRole('link', { name: 'Уведомления' })).not.toBeInTheDocument()
+
+    rerender(
+      <Header logo={<span>LOGO</span>} homeHref="/" user={{ name: 'Alice' }} notifications={notifications} />,
+    )
+    const bell = screen.getByRole('link', { name: 'Уведомления: непрочитанных — 4' })
+    expect(bell.tagName).toBe('A')
+    expect(bell).toHaveAttribute('href', 'https://glocke.example.test/notifications')
+  })
+
+  it('orders the notification anchor after rightSlot and before logout and avatar', () => {
+    render(
+      <Header
+        logo={<span>LOGO</span>}
+        homeHref="/"
+        user={{ name: 'Alice' }}
+        rightSlot={<button type="button">THEME</button>}
+        notifications={{ href: '/notifications', state: { status: 'ready', unreadCount: 3 } }}
+        onLogout={vi.fn()}
+        onSettings={vi.fn()}
+      />,
+    )
+
+    const controls = screen.getByRole('button', { name: 'THEME' }).parentElement
+    expect(controls).not.toBeNull()
+    expect(Array.from(controls!.children)).toEqual([
+      screen.getByRole('button', { name: 'THEME' }),
+      screen.getByRole('link', { name: 'Уведомления: непрочитанных — 3' }),
+      screen.getByRole('button', { name: 'Выйти' }),
+      screen.getByRole('button', { name: 'Настройки аккаунта' }),
+    ])
+  })
+
+  it.each([
+    ['loading', { status: 'loading' as const }, null, 'Уведомления: загрузка числа непрочитанных'],
+    ['zero', { status: 'ready' as const, unreadCount: 0 }, null, 'Уведомления: непрочитанных нет'],
+    ['one', { status: 'ready' as const, unreadCount: 1 }, '1', 'Уведомления: непрочитанных — 1'],
+    ['positive', { status: 'ready' as const, unreadCount: 42 }, '42', 'Уведомления: непрочитанных — 42'],
+    ['99', { status: 'ready' as const, unreadCount: 99 }, '99', 'Уведомления: непрочитанных — 99'],
+    ['100', { status: 'ready' as const, unreadCount: 100 }, '99+', 'Уведомления: непрочитанных — 100'],
+    ['huge', { status: 'ready' as const, unreadCount: 9_999_999 }, '99+', 'Уведомления: непрочитанных — 9999999'],
+    ['error without retained count', { status: 'error' as const }, null, 'Уведомления: число непрочитанных недоступно'],
+    ['error with retained zero', { status: 'error' as const, unreadCount: 0 }, null, 'Уведомления: непрочитанных нет, данные могут быть устаревшими'],
+    ['error with retained count', { status: 'error' as const, unreadCount: 7 }, '7', 'Уведомления: непрочитанных — 7, данные могут быть устаревшими'],
+  ])('renders the %s notification state with an exact accessible count and capped badge', (_name, state, badge, label) => {
+    render(
+      <Header
+        logo={<span>LOGO</span>}
+        homeHref="/"
+        user={{ name: 'Alice' }}
+        notifications={{ href: '/notifications', state }}
+      />,
+    )
+
+    const bell = screen.getByRole('link', { name: label })
+    expect(bell).toHaveAccessibleName(label)
+    if (badge === null) expect(bell.querySelector('[data-notification-badge]')).not.toBeInTheDocument()
+    else expect(bell.querySelector('[data-notification-badge]')).toHaveTextContent(badge)
+  })
+
+  it('is a compact icon target with visible keyboard focus styling', async () => {
+    const user = userEvent.setup()
+    render(
+      <Header
+        logo={<span>LOGO</span>}
+        homeHref="/"
+        user={{ name: 'Alice' }}
+        notifications={{ href: '/notifications', state: { status: 'ready', unreadCount: 2 } }}
+      />,
+    )
+
+    const bell = screen.getByRole('link', { name: 'Уведомления: непрочитанных — 2' })
+    expect(parseFloat(bell.style.width)).toBeLessThanOrEqual(36)
+    expect(parseFloat(bell.style.height)).toBeLessThanOrEqual(36)
+    expect(bell).not.toHaveTextContent('Уведомления')
+
+    await user.tab()
+    await user.tab()
+    expect(bell).toHaveFocus()
+    expect(bell.style.outline).not.toBe('')
+    expect(bell.style.outline).not.toBe('none')
+  })
+
+  it('following the notification link does not invoke settings or logout callbacks', async () => {
+    const user = userEvent.setup()
+    const onSettings = vi.fn()
+    const onLogout = vi.fn()
+    render(
+      <Header
+        logo={<span>LOGO</span>}
+        homeHref="/"
+        user={{ name: 'Alice' }}
+        notifications={{ href: '/notifications', state: { status: 'ready', unreadCount: 2 } }}
+        onSettings={onSettings}
+        onLogout={onLogout}
+      />,
+    )
+    const bell = screen.getByRole('link', { name: 'Уведомления: непрочитанных — 2' })
+    bell.addEventListener('click', (event) => event.preventDefault())
+
+    await user.click(bell)
+
+    expect(onSettings).not.toHaveBeenCalled()
+    expect(onLogout).not.toHaveBeenCalled()
+  })
 })
 
 describe('Header icon button hover feedback', () => {

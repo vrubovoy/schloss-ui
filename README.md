@@ -58,7 +58,36 @@ each consumer's own `--accent`.
 `user` and `onSettings` are given it renders as a real button (there is
 no separate settings icon) — see the "unified account settings" contract
 documented in schlussel's own README for how `onSettings` is meant to be
-wired.
+wired. Its optional controlled `notifications={{ href, state }}` contract adds
+a notification-center link only when `user` is present. `state` is the
+discriminated `HeaderNotificationState` (`loading`, `ready` with an exact
+`unreadCount`, or `error` with an optional retained count); the compact bell
+uses exact count-aware accessible labels and caps only its visual badge at
+`99+`. Controls remain ordered `rightSlot`, bell, logout, avatar.
+
+`useUnreadNotifications({ glockeOrigin, userId, apiClient })` supplies that
+controlled state from Glocke's `/backend/notifications/unread-count` endpoint.
+The configured value must be an origin-only HTTPS URL (HTTP is accepted only
+for localhost development). The hook sends the in-memory bearer token with
+credentials omitted, polls while visible and online with jitter, refreshes on
+focus/visibility/page-show/online recovery, retains the last valid count on
+nonfatal failures, and silently refreshes and retries once on a 401. Every
+request and retry reads the live token from `apiClient.getAccessToken()`; a
+cleared or replaced token is never recovered from hook-local state. Pair its
+result with the Header without coupling the shared component to routing. Older
+structural `ApiClient` implementations without `refreshAccessToken` remain
+supported; their unread 401 is reported as a nonfatal error without a retry:
+
+```tsx
+const notificationState = useUnreadNotifications({ glockeOrigin, userId: user?.id ?? null, apiClient })
+
+<Header
+  logo={<Logo />}
+  homeHref="/"
+  user={user}
+  notifications={{ href: `${glockeOrigin}/notifications`, state: notificationState }}
+/>
+```
 
 `ThemeToggle` is a dropdown for picking one of the platform's four themes
 (`light`/`dark`/`oled`/`sepia`, see the `Theme`/`THEMES`/`getStoredTheme`/
@@ -134,7 +163,19 @@ being copy-pasted per app:
   `base` API prefix, auto-retrying once on a 401 via `${authBase}/refresh`
   (default `authBase` is `'/auth'`) before giving up and calling
   `onUnauthorized()`; a retry that also returns 401 clears the refreshed
-  in-memory token before invoking the callback.
+  in-memory token before invoking the callback. Its public
+  `refreshAccessToken()` performs the same refresh as a silent single-flight
+  operation, returning the token or `null` without invoking `onUnauthorized`.
+  Refresh results are generation-fenced, so a late response cannot restore a
+  logged-out token or replace a newer token. Flights are shared only within the
+  same external session generation. Internal refresh rotates the access token
+  without changing that generation, so concurrent old-token 401 responses retry
+  once with the already-refreshed current token instead of failing or refreshing
+  again. Logout/new-login through `setAccessToken` advances the session generation,
+  fencing stale requests and refreshes without clearing or calling `onUnauthorized`
+  for the newer session. The method is optional on the base `ApiClient` interface
+  for source compatibility with existing structural clients; `createApiClient`
+  returns `CreatedApiClient` and always provides it.
 - `AuthContext`/`useAuth()`/`useAuthProvider({ apiClient, authBase? })` —
   React auth state: bootstraps via a silent `${authBase}/refresh` +
   `${authBase}/me` on mount, exposes `{ user, loading, logout, setUser }`.
