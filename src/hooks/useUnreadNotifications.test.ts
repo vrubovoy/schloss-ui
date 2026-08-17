@@ -169,14 +169,43 @@ describe('useUnreadNotifications refresh lifecycle', () => {
 
   it('coalesces unread invalidation with an unread request already in flight', async () => {
     const pending = deferred<Response>()
-    fetchMock.mockReturnValueOnce(pending.promise)
-    renderHook(() => useUnreadNotifications({ glockeOrigin, userId: 'user-1', apiClient: makeApiClient() }))
+    fetchMock
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce(response(200, { count: 2 }))
+    const { result } = renderHook(() => useUnreadNotifications({ glockeOrigin, userId: 'user-1', apiClient: makeApiClient() }))
 
-    act(() => invalidateNotificationUnreadCount())
+    act(() => {
+      invalidateNotificationUnreadCount()
+      invalidateNotificationUnreadCount()
+      invalidateNotificationUnreadCount()
+    })
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
     pending.resolve(response(200, { count: 1 }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(result.current).toEqual({ status: 'ready', unreadCount: 2 }))
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('queues one follow-up for cross-tab invalidations received during an unread request', async () => {
+    vi.stubGlobal('BroadcastChannel', MockBroadcastChannel)
+    const pending = deferred<Response>()
+    fetchMock
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce(response(200, { count: 2 }))
+    const { result } = renderHook(() => useUnreadNotifications({ glockeOrigin, userId: 'user-1', apiClient: makeApiClient() }))
+    const hookChannel = MockBroadcastChannel.instances[0]
+    const remoteTab = new MockBroadcastChannel(hookChannel.name)
+
+    remoteTab.postMessage({ type: 'invalidate', source: 'another-tab' })
+    remoteTab.postMessage({ type: 'invalidate', source: 'another-tab' })
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    pending.resolve(response(200, { count: 1 }))
+    await waitFor(() => expect(result.current).toEqual({ status: 'ready', unreadCount: 2 }))
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    remoteTab.close()
   })
 
   it('broadcasts a safe cross-tab invalidation without double-fetching in the sender window', async () => {
@@ -400,6 +429,26 @@ describe('useUnreadNotifications cancellation and authentication', () => {
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
 
     expect(result.current).toEqual({ status: 'ready', unreadCount: 2 })
+  })
+
+  it('discards a queued invalidation when its request generation is replaced', async () => {
+    const oldRequest = deferred<Response>()
+    fetchMock
+      .mockReturnValueOnce(oldRequest.promise)
+      .mockResolvedValueOnce(response(200, { count: 2 }))
+    const apiClient = makeApiClient('token-1')
+    const { result, rerender } = renderHook(
+      ({ userId }) => useUnreadNotifications({ glockeOrigin, userId, apiClient }),
+      { initialProps: { userId: 'user-1' } },
+    )
+
+    act(() => invalidateNotificationUnreadCount())
+    rerender({ userId: 'user-2' })
+    await waitFor(() => expect(result.current).toEqual({ status: 'ready', unreadCount: 2 }))
+
+    oldRequest.resolve(response(200, { count: 1 }))
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('does not refresh or retry a stale unread 401 after the live token is cleared', async () => {

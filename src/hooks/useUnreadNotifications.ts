@@ -93,6 +93,7 @@ export function useUnreadNotifications({
     let active = true
     let controller: AbortController | null = null
     let inFlight: Promise<void> | null = null
+    let invalidationQueued = false
     let pollTimer: ReturnType<typeof setTimeout> | null = null
     let lastGoodCount: number | undefined
     let lastRequestAt: number | null = null
@@ -168,10 +169,19 @@ export function useUnreadNotifications({
         } finally {
           if (inFlight === run) inFlight = null
           if (controller === requestController) controller = null
+          if (isCurrent()) drainQueuedInvalidation()
         }
       })()
       inFlight = run
       return run
+    }
+
+    function drainQueuedInvalidation(): boolean {
+      if (!invalidationQueued || inFlight || !canRequest()) return false
+      invalidationQueued = false
+      void request()
+      schedulePoll()
+      return true
     }
 
     function schedulePoll() {
@@ -193,6 +203,10 @@ export function useUnreadNotifications({
         pollTimer = null
         return
       }
+      if (invalidationQueued) {
+        drainQueuedInvalidation()
+        return
+      }
       const now = Date.now()
       if (lastRequestAt !== null && now - lastRequestAt < RECOVERY_THROTTLE_MS) {
         schedulePoll()
@@ -203,8 +217,8 @@ export function useUnreadNotifications({
     }
 
     function invalidate() {
-      void request()
-      schedulePoll()
+      invalidationQueued = true
+      if (!drainQueuedInvalidation()) schedulePoll()
     }
 
     let invalidationChannel: BroadcastChannel | null = null
@@ -238,6 +252,7 @@ export function useUnreadNotifications({
 
     return () => {
       active = false
+      invalidationQueued = false
       controller?.abort()
       if (pollTimer) clearTimeout(pollTimer)
       window.removeEventListener('focus', recover)

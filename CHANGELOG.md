@@ -305,6 +305,7 @@ fit best; add a new section if none fits.
 - Added `invalidateNotificationUnreadCount()` for mutation-driven refreshes.
   Hooks refresh immediately in the same window and synchronize invalidations
   across same-origin tabs with a safe `BroadcastChannel` message containing no
-  auth or notification data. In-flight requests coalesce, sender broadcasts do
-  not trigger a second local fetch, and unsupported browsers fall back cleanly
-  to same-window invalidation.
+  auth or notification data. Invalidations received in flight coalesce into one
+  mandatory follow-up fetch, preventing a pre-mutation result from persisting;
+  sender broadcasts do not duplicate their local invalidation, and unsupported
+  browsers fall back cleanly to same-window invalidation.
