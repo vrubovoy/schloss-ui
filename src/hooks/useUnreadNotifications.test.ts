@@ -1,7 +1,7 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApiClient } from '../auth/apiClient'
-import { invalidateNotificationUnreadCount, useUnreadNotifications } from './useUnreadNotifications'
+import { invalidateNotificationUnreadCount, normalizeNotificationOrigin, useUnreadNotifications } from './useUnreadNotifications'
 
 function response(status: number, body: unknown): Response {
   return {
@@ -81,6 +81,39 @@ class MockBroadcastChannel {
 const glockeOrigin = 'https://glocke.example.test'
 const unreadUrl = `${glockeOrigin}/backend/notifications/unread-count`
 let fetchMock: ReturnType<typeof vi.fn>
+
+describe('normalizeNotificationOrigin', () => {
+  it.each([
+    ['https://glocke.example.test', 'https://glocke.example.test'],
+    ['https://GLOCKE.example.test:443/', 'https://glocke.example.test'],
+    ['http://localhost', 'http://localhost'],
+    ['http://localhost:5173/', 'http://localhost:5173'],
+  ])('normalizes trusted origin %s', (value, expected) => {
+    expect(normalizeNotificationOrigin(value)).toBe(expected)
+  })
+
+  it.each([
+    'javascript:alert(1)',
+    'file:///tmp/glocke',
+    'https://user:password@glocke.example.test',
+    'https://glocke.example.test/path',
+    'https://glocke.example.test?query=1',
+    'https://glocke.example.test#fragment',
+    'https://glocke.example.test\\path',
+    'https://glocke',
+    'https://glocke.internal',
+    'https://glocke.home.arpa',
+    'https://10.0.0.1',
+    'https://172.16.0.1',
+    'https://192.168.1.1',
+    'https://[::1]',
+    'https://[fd00::1]',
+    'http://glocke.example.test',
+    'http://127.0.0.1',
+  ])('rejects untrusted origin %s', (value) => {
+    expect(normalizeNotificationOrigin(value)).toBeNull()
+  })
+})
 
 beforeEach(() => {
   fetchMock = vi.fn()

@@ -67,8 +67,12 @@ uses exact count-aware accessible labels and caps only its visual badge at
 
 `useUnreadNotifications({ glockeOrigin, userId, apiClient })` supplies that
 controlled state from Glocke's `/backend/notifications/unread-count` endpoint.
-The configured value must be an origin-only HTTPS URL (HTTP is accepted only
-for localhost development). An invalid value fails closed as the nonfatal
+The configured value must be an origin-only public HTTPS URL (HTTP is accepted
+only for exact `localhost` development); credentials, paths, query/fragment,
+single-label/internal names, and private addresses are rejected.
+`normalizeNotificationOrigin(value)` exposes this same canonicalization and
+trust check to consumers, returning the normalized origin or `null`. An invalid
+value fails closed as the nonfatal
 `{ status: 'error' }` state without installing listeners/timers or making a
 request, and recovers normally if a later render supplies a valid origin. The
 hook sends the in-memory bearer token with

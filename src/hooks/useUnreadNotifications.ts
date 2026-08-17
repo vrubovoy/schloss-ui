@@ -46,7 +46,42 @@ export function invalidateNotificationUnreadCount(): void {
   }
 }
 
-function normalizeTrustedOrigin(value: string): string | null {
+function isNonPublicHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '')
+  if (host === 'localhost') return false
+  if (!host.includes('.') && !host.includes(':')) return true
+  if (['.internal', '.lan', '.local', '.localdomain', '.localhost', '.home', '.home.arpa'].some((suffix) => host.endsWith(suffix))) return true
+
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (ipv4) {
+    const [a, b] = ipv4.slice(1).map(Number)
+    return a === 0
+      || a === 10
+      || a === 127
+      || (a === 100 && b >= 64 && b <= 127)
+      || (a === 169 && b === 254)
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168)
+      || (a === 198 && (b === 18 || b === 19))
+      || a >= 224
+  }
+
+  if (host.includes(':')) {
+    return host === '::'
+      || host === '::1'
+      || host.startsWith('::ffff:')
+      || /^f[cd]/.test(host)
+      || /^fe[89ab]/.test(host)
+      || host.startsWith('ff')
+  }
+  return false
+}
+
+/** Validates and canonicalizes the public Glocke service origin. */
+export function normalizeNotificationOrigin(value: string): string | null {
+  const originSyntax = value.match(/^[a-z][a-z\d+.-]*:\/\/([^/?#\\]+)\/?$/i)
+  if (!originSyntax || originSyntax[1].includes('@')) return null
+
   let url: URL
   try {
     url = new URL(value)
@@ -56,7 +91,7 @@ function normalizeTrustedOrigin(value: string): string | null {
 
   const isOriginOnly = url.pathname === '/' && !url.search && !url.hash && !url.username && !url.password
   const isSecure = url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === 'localhost')
-  if (!isOriginOnly || !isSecure) return null
+  if (!isOriginOnly || !isSecure || isNonPublicHost(url.hostname)) return null
   return url.origin
 }
 
@@ -73,7 +108,7 @@ export function useUnreadNotifications({
   userId,
   apiClient,
 }: UseUnreadNotificationsOptions): UnreadNotificationsState {
-  const normalizedOrigin = normalizeTrustedOrigin(glockeOrigin)
+  const normalizedOrigin = normalizeNotificationOrigin(glockeOrigin)
   const accessToken = normalizedOrigin ? apiClient.getAccessToken() : null
   const [state, setState] = useState<UnreadNotificationsState>(
     normalizedOrigin ? { status: 'loading' } : UNAVAILABLE_STATE,

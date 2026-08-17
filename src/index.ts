@@ -80,5 +80,5 @@ export type { AuthUser, AuthState, UseAuthProviderConfig } from './auth/useAuthP
 export { useSidebarWidth } from './hooks/useSidebarWidth'
 export type { UseSidebarWidthOptions, UseSidebarWidthResult } from './hooks/useSidebarWidth'
 
-export { invalidateNotificationUnreadCount, useUnreadNotifications } from './hooks/useUnreadNotifications'
+export { invalidateNotificationUnreadCount, normalizeNotificationOrigin, useUnreadNotifications } from './hooks/useUnreadNotifications'
 export type { UnreadNotificationsState, UseUnreadNotificationsOptions } from './hooks/useUnreadNotifications'

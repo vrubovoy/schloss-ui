@@ -313,3 +313,7 @@ fit best; add a new section if none fits.
   instead of throwing during render. No request, listener, timer, or channel is
   created until a valid secure origin is supplied, allowing configuration to
   recover on a later render without crashing pre-auth/loading pages.
+- Exported `normalizeNotificationOrigin()` as the hook's single public trust
+  boundary. It canonicalizes public HTTPS and exact localhost-development HTTP
+  origins while rejecting active/file schemes, credentials, URL suffixes,
+  internal names, private addresses, and other plaintext origins.
