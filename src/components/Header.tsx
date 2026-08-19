@@ -4,7 +4,7 @@ import { useHover } from '../hooks/useHover'
 import type { ApiClient } from '../auth/apiClient'
 import { NotificationDropdown } from './NotificationDropdown'
 import { NotificationToast } from './NotificationToast'
-import { authedFetch, fetchRecentNotifications, type RecentNotification } from '../lib/notificationFetch'
+import { authedFetch, fetchRecentNotifications, resolveActionUrl, type RecentNotification } from '../lib/notificationFetch'
 import { invalidateNotificationUnreadCount } from '../hooks/useUnreadNotifications'
 
 export interface HeaderUser {
@@ -254,7 +254,7 @@ function NotificationBell(props: HeaderNotifications) {
     void authedFetch(glockeOrigin, apiClient, `/backend/notifications/${toast.id}/read`, { method: 'POST' }, new AbortController().signal)
       .then(() => invalidateNotificationUnreadCount())
       .catch(() => {})
-    window.location.href = toast.actionUrl ?? props.href
+    window.location.href = resolveActionUrl(toast.actionUrl, glockeOrigin, props.href)
   }
 
   if (!props.glockeOrigin || !props.apiClient) return <NotificationLink {...props} />

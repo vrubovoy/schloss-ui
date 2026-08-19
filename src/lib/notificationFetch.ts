@@ -43,6 +43,29 @@ export async function authedFetch(
   return response
 }
 
+// GET /notifications returns actionUrl exactly as Glocke's producers/
+// renderer stored it - some (Kuvert/Tafel's own domain events) are already
+// absolute (their own origin), others (e.g. schlussel.security.
+// password_changed.v1's "/settings") are deliberately relative, meant to
+// resolve against GLOCKE'S origin. That's transparent when rendered on
+// Glocke's own notification page (a relative href just resolves against
+// the current page like any other), but the dropdown/toast render on
+// EVERY app's own page now - passing a relative actionUrl straight to
+// window.location.href there resolves it against the wrong origin
+// entirely (e.g. https://kuvert.localhost/settings, 404).
+export function resolveActionUrl(actionUrl: string | null, glockeOrigin: string, fallback: string): string {
+  if (!actionUrl) return fallback
+  try {
+    return new URL(actionUrl).href
+  } catch {
+    try {
+      return new URL(actionUrl, glockeOrigin).href
+    } catch {
+      return fallback
+    }
+  }
+}
+
 export async function fetchRecentNotifications(
   origin: string, apiClient: ApiClient, limit: number, signal: AbortSignal,
 ): Promise<RecentNotification[] | null> {

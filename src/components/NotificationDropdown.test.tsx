@@ -83,6 +83,35 @@ describe('NotificationDropdown', () => {
     ))
   })
 
+  it('navigates a relative actionUrl (e.g. password-changed\'s "/settings") against Glocke\'s origin, not the current page\'s', async () => {
+    // jsdom silently reverts a cross-origin window.location.href
+    // assignment back to the current URL rather than retaining it (it
+    // can't actually load a new document) - stub location with a plain
+    // settable object so the assignment is observable here.
+    const originalLocation = window.location
+    // @ts-expect-error -- intentionally replacing with a minimal stub
+    delete window.location
+    // @ts-expect-error -- see above
+    window.location = { href: '' }
+
+    try {
+      const user = userEvent.setup()
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [{ ...ITEM, actionUrl: '/settings' }] }) })
+        .mockResolvedValue({ ok: true, json: async () => ({}) }))
+
+      render(
+        <NotificationDropdown open glockeOrigin="https://glocke.example.test" apiClient={fakeApiClient()} notificationsHref="/notifications" />,
+      )
+      await user.click(await screen.findByRole('menuitem', { name: /Пароль изменён/ }))
+
+      expect(window.location.href).toBe('https://glocke.example.test/settings')
+    } finally {
+      // @ts-expect-error -- restoring the real Location object
+      window.location = originalLocation
+    }
+  })
+
   it('clears (marks all read) via the header button when there is unread content', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn()
