@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CheckCheck } from 'lucide-react'
+import { CheckCheck, Trash2 } from 'lucide-react'
 import type { ApiClient } from '../auth/apiClient'
 import { invalidateNotificationUnreadCount } from '../hooks/useUnreadNotifications'
 import { authedFetch, fetchRecentNotifications, resolveActionUrl, type RecentNotification } from '../lib/notificationFetch'
@@ -39,6 +39,8 @@ export function NotificationDropdown({ open, glockeOrigin, apiClient, notificati
   const [state, setState] = useState<DropdownState>({ status: 'loading' })
   const clearingRef = useRef(false)
   const [clearing, setClearing] = useState(false)
+  const deletingRef = useRef(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -95,7 +97,28 @@ export function NotificationDropdown({ open, glockeOrigin, apiClient, notificati
     }
   }
 
+  // Deletes every notification, not just the RECENT_LIMIT shown here - the
+  // dropdown's own preview list is a small window into the full server-side
+  // set, so this always clears the dropdown to empty regardless of how many
+  // items were actually loaded.
+  async function handleDeleteAll() {
+    if (deletingRef.current) return
+    deletingRef.current = true
+    setDeleting(true)
+    try {
+      await authedFetch(glockeOrigin, apiClient, '/backend/notifications', { method: 'DELETE' }, new AbortController().signal)
+      setState({ status: 'ready', items: [] })
+      invalidateNotificationUnreadCount()
+    } catch {
+      // Leave the list as-is; the badge/dropdown will reconcile on next open.
+    } finally {
+      deletingRef.current = false
+      setDeleting(false)
+    }
+  }
+
   const hasUnread = state.status === 'ready' && state.items.some((item) => !item.readAt)
+  const hasItems = state.status === 'ready' && state.items.length > 0
 
   return (
     <div
@@ -120,20 +143,36 @@ export function NotificationDropdown({ open, glockeOrigin, apiClient, notificati
         padding: '0.625rem 0.875rem', borderBottom: '1px solid var(--border)',
       }}>
         <strong style={{ fontSize: '0.8125rem', color: 'var(--text-primary)' }}>Уведомления</strong>
-        {hasUnread && (
-          <button
-            type="button"
-            onClick={() => void handleClearAll()}
-            disabled={clearing}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              background: 'none', border: 'none', cursor: clearing ? 'default' : 'pointer',
-              color: 'var(--accent)', fontSize: '0.75rem', fontWeight: 600, padding: 0,
-            }}
-          >
-            <CheckCheck size={13} />Прочитать все
-          </button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {hasUnread && (
+            <button
+              type="button"
+              onClick={() => void handleClearAll()}
+              disabled={clearing}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                background: 'none', border: 'none', cursor: clearing ? 'default' : 'pointer',
+                color: 'var(--accent)', fontSize: '0.75rem', fontWeight: 600, padding: 0,
+              }}
+            >
+              <CheckCheck size={13} />Прочитать все
+            </button>
+          )}
+          {hasItems && (
+            <button
+              type="button"
+              onClick={() => void handleDeleteAll()}
+              disabled={deleting}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                background: 'none', border: 'none', cursor: deleting ? 'default' : 'pointer',
+                color: 'var(--danger)', fontSize: '0.75rem', fontWeight: 600, padding: 0,
+              }}
+            >
+              <Trash2 size={13} />Удалить все
+            </button>
+          )}
+        </div>
       </div>
 
       {state.status === 'loading' && (
