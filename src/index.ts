@@ -4,6 +4,9 @@ export type { HeaderNotificationState, HeaderNotifications, HeaderProps, HeaderU
 export { NotificationDropdown } from './components/NotificationDropdown'
 export type { NotificationDropdownProps, RecentNotification } from './components/NotificationDropdown'
 
+export { NotificationToast } from './components/NotificationToast'
+export type { NotificationToastProps } from './components/NotificationToast'
+
 export { Footer } from './components/Footer'
 export type { FooterProps } from './components/Footer'
 
@@ -85,3 +88,6 @@ export type { UseSidebarWidthOptions, UseSidebarWidthResult } from './hooks/useS
 
 export { invalidateNotificationUnreadCount, normalizeNotificationOrigin, useUnreadNotifications } from './hooks/useUnreadNotifications'
 export type { UnreadNotificationsState, UseUnreadNotificationsOptions } from './hooks/useUnreadNotifications'
+
+export { useAvatarUrl } from './hooks/useAvatarUrl'
+export type { UseAvatarUrlOptions } from './hooks/useAvatarUrl'

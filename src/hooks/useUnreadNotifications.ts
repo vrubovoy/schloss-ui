@@ -48,9 +48,15 @@ export function invalidateNotificationUnreadCount(): void {
 
 function isNonPublicHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '')
-  if (host === 'localhost' || host === 'glocke.localhost') return false
+  // Any *.localhost host, not just glocke's own - the .localhost TLD is
+  // always loopback-safe per RFC 6761 (browsers/OS resolve it specially),
+  // so singling out one hardcoded subdomain rejected every other service's
+  // own *.localhost dev origin (e.g. auth.localhost) for no security
+  // reason - this function is reused by other origin-validating callers
+  // (see useAvatarUrl.ts), not just the notifications one it's named for.
+  if (host === 'localhost' || host.endsWith('.localhost')) return false
   if (!host.includes('.') && !host.includes(':')) return true
-  if (['.internal', '.lan', '.local', '.localdomain', '.localhost', '.home', '.home.arpa'].some((suffix) => host.endsWith(suffix))) return true
+  if (['.internal', '.lan', '.local', '.localdomain', '.home', '.home.arpa'].some((suffix) => host.endsWith(suffix))) return true
 
   const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
   if (ipv4) {
