@@ -621,6 +621,55 @@ describe('Header notification bell new-arrival toast', () => {
     expect(screen.queryByText('Пароль изменён')).not.toBeInTheDocument()
   })
 
+  it('navigates a relative actionUrl (e.g. password-changed\'s "/settings") against Glocke\'s origin, not the current page\'s', async () => {
+    // jsdom silently reverts a cross-origin window.location.href
+    // assignment back to the current URL rather than retaining it - stub
+    // location with a plain settable object so the assignment is
+    // observable here.
+    const originalLocation = window.location
+    // @ts-expect-error -- intentionally replacing with a minimal stub
+    delete window.location
+    // @ts-expect-error -- see above
+    window.location = { href: '' }
+
+    try {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            items: [{
+              id: 'n1', title: 'Пароль изменён', body: 'Текст', actionUrl: '/settings',
+              createdAt: new Date().toISOString(), readAt: null,
+            }],
+          }),
+        })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+      vi.stubGlobal('fetch', fetchMock)
+      const user = userEvent.setup()
+      const { rerender } = renderWithState({ status: 'ready', unreadCount: 0 })
+      rerender(
+        <Header
+          logo={<span>LOGO</span>}
+          homeHref="/"
+          user={{ name: 'Alice' }}
+          notifications={{
+            href: '/notifications',
+            state: { status: 'ready', unreadCount: 1 },
+            glockeOrigin: 'https://glocke.example.test',
+            apiClient: fakeApiClient(),
+          }}
+        />,
+      )
+
+      await user.click(await screen.findByText('Пароль изменён'))
+
+      expect(window.location.href).toBe('https://glocke.example.test/settings')
+    } finally {
+      // @ts-expect-error -- restoring the real Location object
+      window.location = originalLocation
+    }
+  })
+
   it('dismisses via its close button without navigating', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,

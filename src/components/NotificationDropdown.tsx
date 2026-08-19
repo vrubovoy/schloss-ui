@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { CheckCheck } from 'lucide-react'
 import type { ApiClient } from '../auth/apiClient'
 import { invalidateNotificationUnreadCount } from '../hooks/useUnreadNotifications'
-import { authedFetch, fetchRecentNotifications, type RecentNotification } from '../lib/notificationFetch'
+import { authedFetch, fetchRecentNotifications, resolveActionUrl, type RecentNotification } from '../lib/notificationFetch'
 
 export type { RecentNotification }
 
@@ -73,7 +73,7 @@ export function NotificationDropdown({ open, glockeOrigin, apiClient, notificati
 
   function handleItemClick(item: RecentNotification) {
     if (!item.readAt) void markRead(item.id)
-    window.location.href = item.actionUrl ?? notificationsHref
+    window.location.href = resolveActionUrl(item.actionUrl, glockeOrigin, notificationsHref)
   }
 
   async function handleClearAll() {
