@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Header } from './Header'
 import type { ApiClient } from '../auth/apiClient'
@@ -114,6 +114,38 @@ describe('Header', () => {
 
     const avatar = screen.getByTitle('роберт эванс')
     expect(avatar.textContent?.trim()).toBe('Р')
+  })
+
+  it('renders the uploaded avatar image instead of the initial when avatarUrl is set', () => {
+    render(
+      <Header
+        logo={<span>LOGO-MARKER</span>}
+        homeHref="/"
+        user={{ name: 'Alice', avatarUrl: 'data:image/png;base64,xyz' }}
+      />,
+    )
+
+    const avatar = screen.getByTitle('Alice')
+    const img = avatar.querySelector('img')
+    expect(img).toHaveAttribute('src', 'data:image/png;base64,xyz')
+    expect(avatar.textContent?.trim()).toBe('')
+  })
+
+  it('falls back to the initial letter if the avatar image fails to load', () => {
+    render(
+      <Header
+        logo={<span>LOGO-MARKER</span>}
+        homeHref="/"
+        user={{ name: 'Alice', avatarUrl: 'data:image/png;base64,broken' }}
+      />,
+    )
+
+    const avatar = screen.getByTitle('Alice')
+    const img = avatar.querySelector('img')!
+    fireEvent.error(img)
+
+    expect(avatar.querySelector('img')).not.toBeInTheDocument()
+    expect(avatar.textContent?.trim()).toBe('A')
   })
 
   it('renders the avatar as a settings control when user and onSettings are both provided, and clicking it calls onSettings once', async () => {
@@ -475,6 +507,145 @@ describe('Header notification bell hover/focus preview dropdown', () => {
 
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
     vi.unstubAllGlobals()
+  })
+})
+
+describe('Header notification bell new-arrival toast', () => {
+  function fakeApiClient(): ApiClient {
+    return {
+      setAccessToken: () => {},
+      getAccessToken: () => 'token-1',
+      get: async () => { throw new Error('not used') },
+      post: async () => { throw new Error('not used') },
+      put: async () => { throw new Error('not used') },
+      delete: async () => { throw new Error('not used') },
+    }
+  }
+
+  function renderWithState(state: { status: 'ready'; unreadCount: number }) {
+    return render(
+      <Header
+        logo={<span>LOGO</span>}
+        homeHref="/"
+        user={{ name: 'Alice' }}
+        notifications={{
+          href: '/notifications',
+          state,
+          glockeOrigin: 'https://glocke.example.test',
+          apiClient: fakeApiClient(),
+        }}
+      />,
+    )
+  }
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('does not toast on the first ready state (pre-existing unread, not a new arrival)', () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    renderWithState({ status: 'ready', unreadCount: 3 })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('shows a toast when the unread count increases after the baseline is set', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [{
+          id: 'n1', title: 'Пароль изменён', body: 'Пароль вашей учётной записи был изменён.',
+          actionUrl: null, createdAt: new Date().toISOString(), readAt: null,
+        }],
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const { rerender } = renderWithState({ status: 'ready', unreadCount: 0 })
+
+    rerender(
+      <Header
+        logo={<span>LOGO</span>}
+        homeHref="/"
+        user={{ name: 'Alice' }}
+        notifications={{
+          href: '/notifications',
+          state: { status: 'ready', unreadCount: 1 },
+          glockeOrigin: 'https://glocke.example.test',
+          apiClient: fakeApiClient(),
+        }}
+      />,
+    )
+
+    expect(await screen.findByText('Пароль изменён')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://glocke.example.test/backend/notifications?limit=1',
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer token-1' }) }),
+    )
+  })
+
+  it('marks the toast read and navigates when clicked', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          items: [{
+            id: 'n1', title: 'Пароль изменён', body: 'Текст', actionUrl: 'https://kuvert.example.test/settings',
+            createdAt: new Date().toISOString(), readAt: null,
+          }],
+        }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    const { rerender } = renderWithState({ status: 'ready', unreadCount: 0 })
+    rerender(
+      <Header
+        logo={<span>LOGO</span>}
+        homeHref="/"
+        user={{ name: 'Alice' }}
+        notifications={{
+          href: '/notifications',
+          state: { status: 'ready', unreadCount: 1 },
+          glockeOrigin: 'https://glocke.example.test',
+          apiClient: fakeApiClient(),
+        }}
+      />,
+    )
+
+    await user.click(await screen.findByText('Пароль изменён'))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      'https://glocke.example.test/backend/notifications/n1/read',
+      expect.objectContaining({ method: 'POST' }),
+    ))
+    expect(screen.queryByText('Пароль изменён')).not.toBeInTheDocument()
+  })
+
+  it('dismisses via its close button without navigating', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ id: 'n1', title: 'Заголовок', body: 'Текст', actionUrl: null, createdAt: new Date().toISOString(), readAt: null }] }),
+    }))
+    const user = userEvent.setup()
+    const { rerender } = renderWithState({ status: 'ready', unreadCount: 0 })
+    rerender(
+      <Header
+        logo={<span>LOGO</span>}
+        homeHref="/"
+        user={{ name: 'Alice' }}
+        notifications={{
+          href: '/notifications',
+          state: { status: 'ready', unreadCount: 1 },
+          glockeOrigin: 'https://glocke.example.test',
+          apiClient: fakeApiClient(),
+        }}
+      />,
+    )
+    await screen.findByText('Заголовок')
+
+    await user.click(screen.getByRole('button', { name: 'Закрыть уведомление' }))
+
+    await waitFor(() => expect(screen.queryByText('Заголовок')).not.toBeInTheDocument())
   })
 })
 

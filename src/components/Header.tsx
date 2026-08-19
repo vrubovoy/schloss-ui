@@ -3,9 +3,15 @@ import { Bell, LogOut } from 'lucide-react'
 import { useHover } from '../hooks/useHover'
 import type { ApiClient } from '../auth/apiClient'
 import { NotificationDropdown } from './NotificationDropdown'
+import { NotificationToast } from './NotificationToast'
+import { authedFetch, fetchRecentNotifications, type RecentNotification } from '../lib/notificationFetch'
+import { invalidateNotificationUnreadCount } from '../hooks/useUnreadNotifications'
 
 export interface HeaderUser {
   name: string
+  /** A ready-to-render image source (typically a data: URL from
+   * useAvatarUrl) - omit or pass null to keep the initial-letter avatar. */
+  avatarUrl?: string | null
 }
 
 export type HeaderNotificationState =
@@ -208,26 +214,86 @@ function NotificationBell(props: HeaderNotifications) {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [open])
 
+  const [toastQueue, setToastQueue] = useState<RecentNotification[]>([])
+  const seenUnreadCountRef = useRef<number | null>(null)
+  const glockeOrigin = props.glockeOrigin
+  const apiClient = props.apiClient
+
+  // Pops up a toast for each newly-arrived unread notification (not just
+  // a badge-count bump) - detected as unreadCount increasing since the
+  // last check. The FIRST ready state only records the baseline without
+  // toasting, so a page load with pre-existing unread notifications
+  // doesn't fire a burst of "new" toasts for old ones.
+  useEffect(() => {
+    if (!glockeOrigin || !apiClient) return
+    if (props.state.status !== 'ready') return
+    const count = props.state.unreadCount
+    const previous = seenUnreadCountRef.current
+    seenUnreadCountRef.current = count
+    if (previous === null || count <= previous) return
+
+    const controller = new AbortController()
+    void fetchRecentNotifications(glockeOrigin, apiClient, Math.min(count - previous, 5), controller.signal)
+      .then((items) => {
+        if (!items) return
+        setToastQueue((queue) => [...queue, ...items.filter((item) => !item.readAt)])
+      })
+      .catch(() => {})
+    return () => controller.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the unread count itself should re-trigger this, not every state object identity change
+  }, [props.state.status === 'ready' ? props.state.unreadCount : null, glockeOrigin, apiClient])
+
+  function dismissFrontToast() {
+    setToastQueue((queue) => queue.slice(1))
+  }
+
+  function openFrontToast() {
+    const toast = toastQueue[0]
+    dismissFrontToast()
+    if (!toast || !glockeOrigin || !apiClient) return
+    void authedFetch(glockeOrigin, apiClient, `/backend/notifications/${toast.id}/read`, { method: 'POST' }, new AbortController().signal)
+      .then(() => invalidateNotificationUnreadCount())
+      .catch(() => {})
+    window.location.href = toast.actionUrl ?? props.href
+  }
+
   if (!props.glockeOrigin || !props.apiClient) return <NotificationLink {...props} />
 
   return (
-    <div
-      style={{ position: 'relative' }}
-      onMouseEnter={openNow}
-      onMouseLeave={closeSoon}
-      onFocus={openNow}
-      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false) }}
-    >
-      <NotificationLink {...props} />
-      {open && (
-        <NotificationDropdown
-          open={open}
-          glockeOrigin={props.glockeOrigin}
-          apiClient={props.apiClient}
-          notificationsHref={props.href}
+    <>
+      <div
+        style={{ position: 'relative' }}
+        onMouseEnter={openNow}
+        onMouseLeave={closeSoon}
+        onFocus={openNow}
+        onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false) }}
+      >
+        <NotificationLink {...props} />
+        {open && (
+          <NotificationDropdown
+            open={open}
+            glockeOrigin={props.glockeOrigin}
+            apiClient={props.apiClient}
+            notificationsHref={props.href}
+          />
+        )}
+      </div>
+      {/* Rendered as a sibling, not nested inside the hover/focus wrapper
+       * above: NotificationToast portals to document.body, but React
+       * still bubbles its synthetic events through its REACT-tree
+       * ancestors regardless of DOM position - nested here, clicking the
+       * toast would trigger the wrapper's onFocus and spuriously open the
+       * dropdown too. */}
+      {toastQueue[0] && (
+        <NotificationToast
+          key={toastQueue[0].id}
+          title={toastQueue[0].title}
+          body={toastQueue[0].body}
+          onOpen={openFrontToast}
+          onDismiss={dismissFrontToast}
         />
       )}
-    </div>
+    </>
   )
 }
 
@@ -243,6 +309,7 @@ const AVATAR_STYLE = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
+  overflow: 'hidden',
 } as const
 
 interface AvatarProps {
@@ -253,14 +320,32 @@ interface AvatarProps {
 // The avatar doubles as the settings entry point (there is no separate
 // gear icon anymore) - a real <button> with a hover ring when onSettings
 // is given, a plain non-interactive circle otherwise. `title` stays just
-// the person's name either way (useful on its own, since the avatar is
-// only ever a single initial); the click action is described separately
+// the person's name either way; the click action is described separately
 // via aria-label so screen readers get both.
+function AvatarContent({ user }: { user: HeaderUser }) {
+  const [failed, setFailed] = useState(false)
+  // Retry a new avatarUrl (e.g. after a fresh upload) even if an earlier
+  // one failed to load.
+  useEffect(() => setFailed(false), [user.avatarUrl])
+
+  if (user.avatarUrl && !failed) {
+    return (
+      <img
+        src={user.avatarUrl}
+        alt=""
+        onError={() => setFailed(true)}
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+      />
+    )
+  }
+  return <>{initial(user.name)}</>
+}
+
 function Avatar({ user, onSettings }: AvatarProps) {
   const hover = useHover()
 
   if (!onSettings) {
-    return <div title={user.name} style={AVATAR_STYLE}>{initial(user.name)}</div>
+    return <div title={user.name} style={AVATAR_STYLE}><AvatarContent user={user} /></div>
   }
 
   return (
@@ -280,7 +365,7 @@ function Avatar({ user, onSettings }: AvatarProps) {
         transition: 'box-shadow 150ms',
       }}
     >
-      {initial(user.name)}
+      <AvatarContent user={user} />
     </button>
   )
 }

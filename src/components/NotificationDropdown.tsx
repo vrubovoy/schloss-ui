@@ -2,56 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { CheckCheck } from 'lucide-react'
 import type { ApiClient } from '../auth/apiClient'
 import { invalidateNotificationUnreadCount } from '../hooks/useUnreadNotifications'
+import { authedFetch, fetchRecentNotifications, type RecentNotification } from '../lib/notificationFetch'
+
+export type { RecentNotification }
 
 const RECENT_LIMIT = 5
-
-export interface RecentNotification {
-  id: string
-  title: string
-  body: string
-  actionUrl: string | null
-  createdAt: string
-  readAt: string | null
-}
 
 type DropdownState =
   | { status: 'loading' }
   | { status: 'error' }
   | { status: 'ready'; items: RecentNotification[] }
-
-function isRecentNotification(value: unknown): value is RecentNotification {
-  if (!value || typeof value !== 'object') return false
-  const record = value as Record<string, unknown>
-  return typeof record['id'] === 'string'
-    && typeof record['title'] === 'string'
-    && typeof record['body'] === 'string'
-    && (record['actionUrl'] === null || typeof record['actionUrl'] === 'string')
-    && typeof record['createdAt'] === 'string'
-    && (record['readAt'] === null || typeof record['readAt'] === 'string')
-}
-
-// One-shot authenticated fetch to Glocke's cross-origin API, mirroring
-// useUnreadNotifications.ts's own retry-once-on-401 shape but without its
-// polling/cross-tab machinery - the dropdown only fetches when opened, not
-// continuously.
-async function authedFetch(
-  origin: string, apiClient: ApiClient, path: string, init: RequestInit, signal: AbortSignal,
-): Promise<Response> {
-  const token = apiClient.getAccessToken()
-  if (!token) throw new Error('no access token')
-  const attempt = (bearer: string) => fetch(`${origin}${path}`, {
-    ...init,
-    headers: { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${bearer}` },
-    credentials: 'omit',
-    signal,
-  })
-  let response = await attempt(token)
-  if (response.status === 401 && apiClient.refreshAccessToken) {
-    const refreshed = await apiClient.refreshAccessToken()
-    if (refreshed) response = await attempt(refreshed)
-  }
-  return response
-}
 
 function formatRelative(iso: string): string {
   const then = new Date(iso).getTime()
@@ -87,12 +47,7 @@ export function NotificationDropdown({ open, glockeOrigin, apiClient, notificati
     setState({ status: 'loading' })
     void (async () => {
       try {
-        const response = await authedFetch(
-          glockeOrigin, apiClient, `/backend/notifications?limit=${RECENT_LIMIT}`, {}, controller.signal,
-        )
-        if (!response.ok) throw new Error(`unexpected status ${response.status}`)
-        const payload = await response.json() as { items?: unknown }
-        const items = Array.isArray(payload.items) ? payload.items.filter(isRecentNotification) : null
+        const items = await fetchRecentNotifications(glockeOrigin, apiClient, RECENT_LIMIT, controller.signal)
         if (!active) return
         if (!items) { setState({ status: 'error' }); return }
         setState({ status: 'ready', items })
