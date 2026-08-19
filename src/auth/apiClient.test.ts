@@ -118,7 +118,7 @@ describe('get', () => {
   })
 })
 
-describe('post / put / delete', () => {
+describe('post / put / patch / delete', () => {
   it('post sends method: POST and JSON.stringify(body)', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(201, { id: 1 }))
     const client = createApiClient({ base: '/api', onUnauthorized: vi.fn() })
@@ -145,6 +145,21 @@ describe('post / put / delete', () => {
     expect(url).toBe('/api/things/1')
     expect(init.method).toBe('PUT')
     expect(init.body).toBe(JSON.stringify({ name: 'updated' }))
+  })
+
+  it('patch sends method: PATCH and JSON.stringify(body)', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { id: 1, name: 'renamed' }))
+    const client = createApiClient({ base: '/api', onUnauthorized: vi.fn() })
+
+    const result = await client.patch('/things/1', { name: 'renamed' })
+
+    expect(result).toEqual({ id: 1, name: 'renamed' })
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/things/1')
+    expect(init.method).toBe('PATCH')
+    expect(init.body).toBe(JSON.stringify({ name: 'renamed' }))
+    expect(init.credentials).toBe('include')
+    expect(header(init, 'Content-Type')).toBe('application/json')
   })
 
   it('delete sends method: DELETE', async () => {
