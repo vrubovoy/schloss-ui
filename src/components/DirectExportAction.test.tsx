@@ -123,4 +123,18 @@ describe('DirectExportAction', () => {
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
+
+  it('omits any icon by default', () => {
+    render(<DirectExportAction {...defaultProps} />)
+    expect(screen.queryByTestId('card-icon')).not.toBeInTheDocument()
+  })
+
+  it('renders an optional leading icon beside the title/description, flexed with the card', () => {
+    const { container } = render(
+      <DirectExportAction {...defaultProps} icon={<svg data-testid="card-icon" />} />,
+    )
+    expect(screen.getByTestId('card-icon')).toBeInTheDocument()
+    expect(container.querySelector('section')).toHaveStyle({ display: 'flex' })
+    expect(screen.getByRole('heading', { name: 'Экспорт данных' })).toBeInTheDocument()
+  })
 })

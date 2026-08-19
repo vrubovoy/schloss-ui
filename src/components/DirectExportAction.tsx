@@ -1,4 +1,4 @@
-import { useId, useRef } from 'react'
+import { useId, useRef, type ReactNode } from 'react'
 import { Download } from 'lucide-react'
 import { ICON_SIZE } from '../iconSize'
 import { Button } from './Button'
@@ -11,6 +11,11 @@ export interface DirectExportActionProps {
   onExport: () => void | Promise<void>
   loading?: boolean
   error?: string | null
+  /** Optional leading icon (e.g. lucide-react at ICON_SIZE.illustrative-ish
+   * 24px), rendered beside the title/description the same way host apps'
+   * own icon-prefixed info cards do - lets this card sit flush with
+   * sibling cards that have one, instead of sitting visibly further left. */
+  icon?: ReactNode
 }
 
 export function DirectExportAction({
@@ -21,6 +26,7 @@ export function DirectExportAction({
   onExport,
   loading = false,
   error,
+  icon,
 }: DirectExportActionProps) {
   const titleId = useId()
   const exportingRef = useRef(false)
@@ -41,17 +47,8 @@ export function DirectExportAction({
     }
   }
 
-  return (
-    <section
-      aria-labelledby={titleId}
-      aria-busy={loading}
-      style={{
-        padding: '1.5rem',
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-md)',
-      }}
-    >
+  const body = (
+    <>
       <h2
         id={titleId}
         style={{
@@ -95,6 +92,23 @@ export function DirectExportAction({
           {error}
         </p>
       )}
+    </>
+  )
+
+  return (
+    <section
+      aria-labelledby={titleId}
+      aria-busy={loading}
+      style={{
+        padding: '1.5rem',
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-md)',
+        ...(icon ? { display: 'flex', gap: '1rem' } : null),
+      }}
+    >
+      {icon && <span aria-hidden="true" style={{ flex: 'none', color: 'var(--accent)', display: 'flex' }}>{icon}</span>}
+      {icon ? <div style={{ flex: 1, minWidth: 0 }}>{body}</div> : body}
     </section>
   )
 }
