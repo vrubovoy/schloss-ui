@@ -69,6 +69,12 @@ describe('Sidebar', () => {
     expect(desktopActive).toHaveAttribute('aria-current', 'page')
   })
 
+  it('sets the badge color to white so a currentColor-based brand mark (e.g. a lucide icon) is legible on the dark accent square', () => {
+    setup({ brandMark: <svg data-testid="brand-mark" /> })
+    const badge = screen.getByTestId('brand-mark').parentElement
+    expect(badge).toHaveStyle({ color: 'rgb(255, 255, 255)' })
+  })
+
   it('renders the user account block and wires the account/logout handlers', async () => {
     const user = userEvent.setup()
     const { onAccountClick, onLogout } = setup()

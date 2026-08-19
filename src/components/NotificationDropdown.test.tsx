@@ -131,6 +131,45 @@ describe('NotificationDropdown', () => {
     ))
   })
 
+  it('deletes all notifications via the header button, clearing the list to the empty state', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [ITEM] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <NotificationDropdown open glockeOrigin="https://glocke.example.test" apiClient={fakeApiClient()} notificationsHref="/notifications" />,
+    )
+    await screen.findByText('Пароль изменён')
+    await user.click(screen.getByRole('button', { name: /удалить все/i }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      'https://glocke.example.test/backend/notifications',
+      expect.objectContaining({ method: 'DELETE' }),
+    ))
+    expect(await screen.findByText('Уведомлений пока нет')).toBeInTheDocument()
+  })
+
+  it('still offers "delete all" when every fetched item is already read (unlike "mark all read", which hides)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [{ ...ITEM, readAt: '2026-08-19T09:05:00.000Z' }] }) }))
+    render(
+      <NotificationDropdown open glockeOrigin="https://glocke.example.test" apiClient={fakeApiClient()} notificationsHref="/notifications" />,
+    )
+    await screen.findByText('Пароль изменён')
+    expect(screen.queryByRole('button', { name: /прочитать все/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /удалить все/i })).toBeInTheDocument()
+  })
+
+  it('has no "delete all" button when there are no items', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) }))
+    render(
+      <NotificationDropdown open glockeOrigin="https://glocke.example.test" apiClient={fakeApiClient()} notificationsHref="/notifications" />,
+    )
+    await screen.findByText('Уведомлений пока нет')
+    expect(screen.queryByRole('button', { name: /удалить все/i })).not.toBeInTheDocument()
+  })
+
   it('has no "clear" button when every fetched item is already read', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [{ ...ITEM, readAt: '2026-08-19T09:05:00.000Z' }] }) }))
     render(

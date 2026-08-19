@@ -173,7 +173,7 @@ export function Sidebar({
         }}>
           <div style={{
             width: 28, height: 28, background: 'var(--sidebar-accent)',
-            borderRadius: 8, flexShrink: 0,
+            borderRadius: 8, flexShrink: 0, color: 'white',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             {brandMark}
