@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Header } from './Header'
+import type { ApiClient } from '../auth/apiClient'
 
 afterEach(() => {
   cleanup()
@@ -351,6 +352,129 @@ describe('Header', () => {
 
     expect(onSettings).not.toHaveBeenCalled()
     expect(onLogout).not.toHaveBeenCalled()
+  })
+})
+
+describe('Header notification bell hover/focus preview dropdown', () => {
+  function fakeApiClient(): ApiClient {
+    return {
+      setAccessToken: () => {},
+      getAccessToken: () => 'token-1',
+      get: async () => { throw new Error('not used') },
+      post: async () => { throw new Error('not used') },
+      put: async () => { throw new Error('not used') },
+      delete: async () => { throw new Error('not used') },
+    }
+  }
+
+  it('renders a plain link-only bell (no dropdown ever) when glockeOrigin/apiClient are not provided', async () => {
+    const user = userEvent.setup()
+    render(
+      <Header
+        logo={<span>LOGO</span>}
+        homeHref="/"
+        user={{ name: 'Alice' }}
+        notifications={{ href: '/notifications', state: { status: 'ready', unreadCount: 1 } }}
+      />,
+    )
+    const bell = screen.getByRole('link', { name: /уведомлен/i })
+    await user.hover(bell)
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
+  it('opens the dropdown on hover and fetches recent notifications from Glocke', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [] }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <Header
+        logo={<span>LOGO</span>}
+        homeHref="/"
+        user={{ name: 'Alice' }}
+        notifications={{
+          href: '/notifications',
+          state: { status: 'ready', unreadCount: 1 },
+          glockeOrigin: 'https://glocke.example.test',
+          apiClient: fakeApiClient(),
+        }}
+      />,
+    )
+    const bell = screen.getByRole('link', { name: /уведомлен/i })
+    await user.hover(bell)
+
+    expect(await screen.findByRole('menu', { name: /последние уведомления/i })).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://glocke.example.test/backend/notifications?limit=5',
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer token-1' }) }),
+    )
+    vi.unstubAllGlobals()
+  })
+
+  it('shows fetched items and closes again on mouse leave', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [{
+          id: 'n1', title: 'Пароль изменён', body: 'Пароль вашей учётной записи был изменён.',
+          actionUrl: null, createdAt: new Date().toISOString(), readAt: null,
+        }],
+      }),
+    }))
+
+    render(
+      <Header
+        logo={<span>LOGO</span>}
+        homeHref="/"
+        user={{ name: 'Alice' }}
+        notifications={{
+          href: '/notifications',
+          state: { status: 'ready', unreadCount: 1 },
+          glockeOrigin: 'https://glocke.example.test',
+          apiClient: fakeApiClient(),
+        }}
+      />,
+    )
+    const bell = screen.getByRole('link', { name: /уведомлен/i })
+    await user.hover(bell)
+
+    expect(await screen.findByText('Пароль изменён')).toBeInTheDocument()
+
+    await user.unhover(bell)
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+    vi.unstubAllGlobals()
+  })
+
+  it('closes on Escape', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) }))
+
+    render(
+      <Header
+        logo={<span>LOGO</span>}
+        homeHref="/"
+        user={{ name: 'Alice' }}
+        notifications={{
+          href: '/notifications',
+          state: { status: 'ready', unreadCount: 1 },
+          glockeOrigin: 'https://glocke.example.test',
+          apiClient: fakeApiClient(),
+        }}
+      />,
+    )
+    const bell = screen.getByRole('link', { name: /уведомлен/i })
+    await user.hover(bell)
+    await screen.findByRole('menu')
+
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+    vi.unstubAllGlobals()
   })
 })
 

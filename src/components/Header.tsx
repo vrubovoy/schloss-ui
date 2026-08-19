@@ -1,6 +1,8 @@
-import { useState, type FocusEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FocusEvent, type ReactNode } from 'react'
 import { Bell, LogOut } from 'lucide-react'
 import { useHover } from '../hooks/useHover'
+import type { ApiClient } from '../auth/apiClient'
+import { NotificationDropdown } from './NotificationDropdown'
 
 export interface HeaderUser {
   name: string
@@ -14,6 +16,13 @@ export type HeaderNotificationState =
 export interface HeaderNotifications {
   href: string
   state: HeaderNotificationState
+  /** Glocke's public origin and this app's own apiClient - both already
+   * computed by whatever called useUnreadNotifications to produce `state`
+   * above. Powers the hover/focus preview dropdown's own on-demand fetch;
+   * omit to keep the bell link-only (no dropdown) for a caller that
+   * hasn't wired these up. */
+  glockeOrigin?: string
+  apiClient?: ApiClient
 }
 
 export interface HeaderProps {
@@ -165,6 +174,63 @@ function NotificationLink({ href, state }: HeaderNotifications) {
   )
 }
 
+// Wraps the bell link with the hover/focus-triggered recent-notifications
+// preview. Kept separate from NotificationLink itself so a caller that
+// hasn't wired glockeOrigin/apiClient (see HeaderNotifications) still gets
+// a plain link-only bell, unchanged from before this dropdown existed.
+function NotificationBell(props: HeaderNotifications) {
+  const [open, setOpen] = useState(false)
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function openNow() {
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null }
+    setOpen(true)
+  }
+  // A short delay (rather than closing instantly on mouseleave) survives
+  // the small gap between the bell icon and the dropdown panel below it -
+  // without it, moving the pointer diagonally from the bell into the
+  // panel can register as having left the wrapper first.
+  function closeSoon() {
+    closeTimerRef.current = setTimeout(() => setOpen(false), 150)
+  }
+
+  // A document-level listener (not onKeyDown on the wrapper) so Escape
+  // closes the dropdown even when it was opened by hover alone - a mouse
+  // hover never moves keyboard focus, so a keydown fired from wherever
+  // focus actually is (usually document.body) would never bubble through
+  // a handler scoped to this wrapper.
+  useEffect(() => {
+    if (!open) return
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [open])
+
+  if (!props.glockeOrigin || !props.apiClient) return <NotificationLink {...props} />
+
+  return (
+    <div
+      style={{ position: 'relative' }}
+      onMouseEnter={openNow}
+      onMouseLeave={closeSoon}
+      onFocus={openNow}
+      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false) }}
+    >
+      <NotificationLink {...props} />
+      {open && (
+        <NotificationDropdown
+          open={open}
+          glockeOrigin={props.glockeOrigin}
+          apiClient={props.apiClient}
+          notificationsHref={props.href}
+        />
+      )}
+    </div>
+  )
+}
+
 const AVATAR_STYLE = {
   width: 28,
   height: 28,
@@ -270,7 +336,7 @@ export function Header({
       {(user || rightSlot) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(0.375rem, 1.5vw, 0.625rem)', minWidth: 0 }}>
           {rightSlot}
-          {user && notifications && <NotificationLink {...notifications} />}
+          {user && notifications && <NotificationBell {...notifications} />}
           {user && onLogout && (
             <HeaderIconButton onClick={onLogout} title="Выйти">
               <LogOut size={16} strokeWidth={2} />

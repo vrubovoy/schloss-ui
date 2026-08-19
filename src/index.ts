@@ -1,6 +1,9 @@
 export { Header } from './components/Header'
 export type { HeaderNotificationState, HeaderNotifications, HeaderProps, HeaderUser } from './components/Header'
 
+export { NotificationDropdown } from './components/NotificationDropdown'
+export type { NotificationDropdownProps, RecentNotification } from './components/NotificationDropdown'
+
 export { Footer } from './components/Footer'
 export type { FooterProps } from './components/Footer'
 
