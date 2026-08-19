@@ -15,12 +15,17 @@ export interface ApiClient {
   get<T>(path: string): Promise<T>
   post<T>(path: string, body: unknown): Promise<T>
   put<T>(path: string, body: unknown): Promise<T>
+  /** Optional for source compatibility with callers/mocks written before
+   * this method existed (e.g. hand-built ApiClient test doubles) -
+   * createApiClient always provides it, same as refreshAccessToken above. */
+  patch?<T>(path: string, body: unknown): Promise<T>
   delete<T>(path: string): Promise<T>
 }
 
 export interface CreatedApiClient extends ApiClient {
   /** Silently refreshes the in-memory token without invoking onUnauthorized. */
   refreshAccessToken(): Promise<string | null>
+  patch<T>(path: string, body: unknown): Promise<T>
 }
 
 export interface CreateApiClientConfig {
@@ -142,6 +147,7 @@ export function createApiClient(config: CreateApiClientConfig): CreatedApiClient
     get: <T>(path: string) => request<T>(path),
     post: <T>(path: string, body: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
     put: <T>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
+    patch: <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
     delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
   }
 }
