@@ -32,6 +32,24 @@ describe('Modal', () => {
     expect(screen.getByText('Содержимое модалки')).toBeInTheDocument()
   })
 
+  it('defaults to the 420px width cap when size is omitted', () => {
+    render(
+      <Modal open onClose={vi.fn()} title="Заголовок">
+        Содержимое модалки
+      </Modal>,
+    )
+    expect(screen.getByRole('dialog')).toHaveStyle({ maxWidth: '420px' })
+  })
+
+  it('widens the cap to 900px with size="large"', () => {
+    render(
+      <Modal open onClose={vi.fn()} title="Предпросмотр" size="large">
+        Содержимое модалки
+      </Modal>,
+    )
+    expect(screen.getByRole('dialog')).toHaveStyle({ maxWidth: '900px' })
+  })
+
   it('moves initial focus inside the dialog when opened', () => {
     render(
       <Modal open onClose={vi.fn()} title="Заголовок">
