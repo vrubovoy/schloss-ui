@@ -12,6 +12,7 @@ self-hosted personal services:
 - [`tafel`](https://github.com/zudaR107/tafel) — task/project tracking
 - [`zettel`](https://github.com/zudaR107/zettel) — markdown note-taking
 - [`glocke`](https://github.com/zudaR107/glocke) — in-app notification center and delivery foundation
+- [`schrank`](https://github.com/zudaR107/schrank) — file storage with nested folders
 - [`tor`](https://github.com/zudaR107/tor) — reverse-proxy gateway
 - **`schloss-ui`** (this repo) — shared frontend components
 - [`schloss-server-kit`](https://github.com/zudaR107/schloss-server-kit) — shared backend auth/CORS kit
@@ -20,8 +21,10 @@ Shared design tokens and layout components consumed by
 [`schloss`](https://github.com/zudaR107/schloss),
 [`schlussel`](https://github.com/zudaR107/schlussel)'s frontend app,
 [`kuvert`](https://github.com/zudaR107/kuvert)'s frontend app,
-[`tafel`](https://github.com/zudaR107/tafel)'s frontend app, and
-[`zettel`](https://github.com/zudaR107/zettel)'s frontend app.
+[`tafel`](https://github.com/zudaR107/tafel)'s frontend app,
+[`zettel`](https://github.com/zudaR107/zettel)'s frontend app,
+[`glocke`](https://github.com/zudaR107/glocke)'s frontend app, and
+[`schrank`](https://github.com/zudaR107/schrank)'s frontend app.
 
 ## What this is (and isn't)
 
