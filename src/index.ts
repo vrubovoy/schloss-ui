@@ -13,6 +13,9 @@ export type { FooterProps } from './components/Footer'
 export { EmptyState } from './components/EmptyState'
 export type { EmptyStateProps } from './components/EmptyState'
 
+export { NotFoundPage } from './components/NotFoundPage'
+export type { NotFoundPageProps } from './components/NotFoundPage'
+
 export { DirectExportAction } from './components/DirectExportAction'
 export type { DirectExportActionProps } from './components/DirectExportAction'
 
@@ -69,6 +72,7 @@ export { currencySymbol } from './lib/currency'
 export { formatDate } from './lib/dateFormat'
 export type { DateFormat, DatePrefs } from './lib/dateFormat'
 export { downloadJson } from './lib/downloadJson'
+export { downloadBlob } from './lib/downloadBlob'
 export { THEMES, getStoredTheme, applyTheme, getThemeUpdatedAt, THEME_CHANGE_EVENT } from './lib/theme'
 export type { Theme, ThemeChangeDetail } from './lib/theme'
 

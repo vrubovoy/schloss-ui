@@ -19,6 +19,12 @@ export interface ModalProps {
   children: ReactNode
   /** Rendered right-aligned; put the primary action last so it's rightmost. */
   actions?: ModalAction[]
+  /** 'default' (the original 420px cap) fits a form or a short message -
+   * most callers. 'large' widens the cap considerably for content that
+   * needs real room, e.g. an image/PDF preview - still capped well
+   * short of the viewport edges, and still scrolls internally past
+   * 90vh tall, same as 'default'. */
+  size?: 'default' | 'large'
 }
 
 const TABBABLE_SELECTOR =
@@ -76,7 +82,7 @@ function CloseButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-export function Modal({ open, onClose, title, icon, children, actions }: ModalProps) {
+export function Modal({ open, onClose, title, icon, children, actions, size = 'default' }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -159,7 +165,7 @@ export function Modal({ open, onClose, title, icon, children, actions }: ModalPr
         tabIndex={-1}
         style={{
           width: '100%',
-          maxWidth: 420,
+          maxWidth: size === 'large' ? 900 : 420,
           maxHeight: '90vh',
           overflowY: 'auto',
           padding: '1.5rem',
