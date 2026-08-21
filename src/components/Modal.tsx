@@ -95,6 +95,18 @@ export function Modal({ open, onClose, title, icon, children, actions, size = 'd
     return () => previousFocus?.focus()
   }, [open])
 
+  // Without this, a page tall enough to scroll on its own keeps its own
+  // scrollbar visible behind the overlay while the dialog also scrolls
+  // internally past maxHeight - two scrollbars sitting right next to each
+  // other at the viewport's edge, reading as a stray/broken extra
+  // scrollbar rather than the dialog's own intentional one.
+  useEffect(() => {
+    if (!open) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previousOverflow }
+  }, [open])
+
   useEffect(() => {
     if (!open) return
     function onKeyDown(event: KeyboardEvent) {
