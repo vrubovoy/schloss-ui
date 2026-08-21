@@ -479,4 +479,41 @@ describe('Modal', () => {
 
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
+
+  it('locks body scroll while open and restores it on close', () => {
+    const { rerender } = render(
+      <Modal open={false} onClose={vi.fn()} title="Заголовок">
+        Содержимое модалки
+      </Modal>,
+    )
+    expect(document.body.style.overflow).toBe('')
+
+    rerender(
+      <Modal open onClose={vi.fn()} title="Заголовок">
+        Содержимое модалки
+      </Modal>,
+    )
+    expect(document.body.style.overflow).toBe('hidden')
+
+    rerender(
+      <Modal open={false} onClose={vi.fn()} title="Заголовок">
+        Содержимое модалки
+      </Modal>,
+    )
+    expect(document.body.style.overflow).toBe('')
+  })
+
+  it('restores a pre-existing body overflow value rather than clearing it', () => {
+    document.body.style.overflow = 'scroll'
+    const { unmount } = render(
+      <Modal open onClose={vi.fn()} title="Заголовок">
+        Содержимое модалки
+      </Modal>,
+    )
+    expect(document.body.style.overflow).toBe('hidden')
+
+    unmount()
+    expect(document.body.style.overflow).toBe('scroll')
+    document.body.style.overflow = ''
+  })
 })
